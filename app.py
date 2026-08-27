@@ -20,6 +20,7 @@ import lab_operations
 import lab_quota
 import lab_router_accounts
 import lab_account
+import lab_cron
 
 ROOT = Path(__file__).resolve().parent
 REPORT = ROOT / "latest-report.txt"
@@ -729,6 +730,32 @@ def api_lab_models():
 @login_required
 def api_lab_snapshot():
     return jsonify(lab_snapshot.get_snapshot())
+
+
+@app.get("/api/lab/cron-jobs")
+@login_required
+def api_lab_cron_jobs():
+    crontab, timers = lab_cron.system_sources()
+    return jsonify({
+        "ok": True,
+        "jobs": lab_cron.list_jobs(),
+        "scheduler": lab_cron.scheduler_status(),
+        "crontab": crontab,
+        "timers": timers,
+        "now": lab_cron._now(),
+    })
+
+
+@app.post("/api/lab/cron-jobs/action")
+@login_required
+def api_lab_cron_job_action():
+    b = request.get_json(force=True) or {}
+    job_id = (b.get("id") or "").strip()
+    act = (b.get("action") or "").strip()
+    if not job_id or act not in ("pause", "resume", "run", "remove"):
+        return jsonify(ok=False, error="Parameter id/action tidak valid"), 400
+    r = lab_cron.action(job_id, act)
+    return jsonify(r)
 
 @app.get("/api/lab/model-picker")
 @login_required
