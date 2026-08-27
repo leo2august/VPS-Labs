@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2024 Israel Abebe Kokiso
+Copyright (c) 2026 Leo2agust
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,8 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---
+Note: The bundled `vps-audit.sh` is a community audit script by Israel Abebe
+Kokiso (MIT, original copyright retained in its header). All other files in
+this repository are (c) 2026 Leo2agust under the MIT License above.

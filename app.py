@@ -62,7 +62,7 @@ def _security_headers(resp):
     resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     if resp.headers.get("Server", "").startswith("Werkzeug"):
-        resp.headers["Server"] = "Leo2agust"
+        resp.headers["Server"] = "VPS Sentinel Labs"
     return resp
 
 # ---- Login brute-force guard (in-memory, per IP + per username) ----
@@ -225,7 +225,7 @@ PORT_CATALOG = {
     5031: ("Kasir POS", "Backend Kasir POS", "pos"),
     8099: ("Hermes WebUI API", "Backend WebUI internal", "hermes-webui"),
     8787: ("Hermes WebUI", "Panel Hermes internal", "hermes-webui"),
-    9118: ("Leo2agust Labs", "Dashboard ini", None),
+    9118: ("VPS Sentinel Labs", "Dashboard ini", None),
     9119: ("Hermes Dashboard", "Dashboard Hermes internal", "hermes-dashboard"),
     20128: ("9router", "Router model AI", "9router"),
     20129: ("Task Router", "Routing model berbasis tugas", "hermes-task-router"),
@@ -778,7 +778,7 @@ def api_lab_usage_pdf():
     except ValueError: period = 30
     data = lab_admin.usage_stats(period)
     return send_file(io.BytesIO(lab_admin.usage_report_pdf(data)), mimetype="application/pdf",
-                     as_attachment=True, download_name=f"leo2agust-labs-usage-{data['period_days']}d.pdf")
+                     as_attachment=True, download_name=f"vps-sentinel-labs-usage-{data['period_days']}d.pdf")
 
 
 @app.get("/api/lab/models")

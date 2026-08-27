@@ -1,4 +1,4 @@
-"""Leo2agust Lab — WebUI-feature integration: chat, skills, memory, sessions.
+"""VPS Sentinel Labs — WebUI-feature integration: chat, skills, memory, sessions.
 Reads local Hermes data + proxies chat via 9router. All read+local actions.
 """
 import json
