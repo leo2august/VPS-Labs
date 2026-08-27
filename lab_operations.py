@@ -6,7 +6,7 @@ import time
 import uuid
 from pathlib import Path
 
-STATE_DB = Path(os.environ.get('LABS_HERMES_DIR', '/home/USER/.hermes')) / 'state.db'
+STATE_DB = Path(os.environ.get("LABS_HERMES_DIR", "/home/USER/.hermes")) / "state.db"
 LAB_SETTINGS = Path(__file__).resolve().parent / "data" / "lab-settings.json"
 LAB_OPTIONS = {
     "theme": {"label": "Tema Labs", "description": "Warna seluruh dashboard Labs.", "choices": [["system", "Ikuti perangkat"], ["light", "Terang lembut"], ["dark", "Gelap nyaman"]], "default": "system"},
@@ -72,11 +72,22 @@ def get_session(sid):
 
 def record_lab_exchange(sid, user_text, reply, model):
     now = time.time(); sid = sid if sid and sid.startswith("labs_") else "labs_" + uuid.uuid4().hex[:16]
+    title = (user_text or "Percakapan Laboratorium")[:60]
     with _db() as con:
         exists = con.execute("SELECT 1 FROM sessions WHERE id=?", (sid,)).fetchone()
         if not exists:
-            con.execute("""INSERT INTO sessions(id,source,user_id,session_key,chat_id,chat_type,display_name,model,started_at,message_count,tool_call_count,title,profile_name)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (sid,"labs","labs-user",sid,"labs","private","Labs Web",model,now,0,0,user_text[:70],"default"))
+            # UNIQUE constraint on title — pastikan tak bentrok
+            dup = con.execute("SELECT 1 FROM sessions WHERE title=?", (title,)).fetchone()
+            if dup:
+                title = f"{title[:50]} {uuid.uuid4().hex[:6]}"
+            try:
+                con.execute("""INSERT INTO sessions(id,source,user_id,session_key,chat_id,chat_type,display_name,model,started_at,message_count,tool_call_count,title,profile_name)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (sid,"labs","labs-user",sid,"labs","private","Labs Web",model,now,0,0,title,"default"))
+            except sqlite3.IntegrityError:
+                # title masih bentrok (race) — fallback ke id sebagai title
+                title = f"{title[:40]} {sid[-8:]}"
+                con.execute("""INSERT OR IGNORE INTO sessions(id,source,user_id,session_key,chat_id,chat_type,display_name,model,started_at,message_count,tool_call_count,title,profile_name)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (sid,"labs","labs-user",sid,"labs","private","Labs Web",model,now,0,0,title,"default"))
         con.executemany("INSERT INTO messages(session_id,role,content,timestamp) VALUES(?,?,?,?)",
                         [(sid,"user",user_text,now),(sid,"assistant",reply,now+.001)])
         con.execute("UPDATE sessions SET message_count=message_count+2,model=? WHERE id=?", (model,sid))
