@@ -19,6 +19,7 @@ import lab_backup
 import lab_operations
 import lab_quota
 import lab_router_accounts
+import lab_failover
 import lab_account
 import lab_cron
 
@@ -61,7 +62,7 @@ def _security_headers(resp):
     resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     if resp.headers.get("Server", "").startswith("Werkzeug"):
-        resp.headers["Server"] = "VPS-Sentinel"
+        resp.headers["Server"] = "Leo2agust"
     return resp
 
 # ---- Login brute-force guard (in-memory, per IP + per username) ----
@@ -93,7 +94,7 @@ except (psutil.Error, AttributeError):
     pass
 last_io = {"at": time.time(), "read": getattr(_boot_io, "read_bytes", 0) if _boot_io else 0, "write": getattr(_boot_io, "write_bytes", 0) if _boot_io else 0}
 last_audit = {"running": False, "at": 0, "checks": [], "summary": {"pass": 0, "warn": 0, "fail": 0}}
-SERVICES = tuple(x.strip() for x in os.environ.get("LABS_SERVICES", "caddy,fail2ban,ssh,nginx,postgresql").split(",") if x.strip())
+SERVICES = ("hermes-webui", "hermes-dashboard", "hermes-gateway", "hermes-task-router", "vps-audit", "caddy", "fail2ban", "9router", "model-router")
 USER_SERVICES = {"hermes-gateway", "hermes-task-router"}
 
 
@@ -224,7 +225,7 @@ PORT_CATALOG = {
     5031: ("Kasir POS", "Backend Kasir POS", "pos"),
     8099: ("Hermes WebUI API", "Backend WebUI internal", "hermes-webui"),
     8787: ("Hermes WebUI", "Panel Hermes internal", "hermes-webui"),
-    9118: ("VPS Sentinel Labs", "Dashboard ini", None),
+    9118: ("Leo2agust Labs", "Dashboard ini", None),
     9119: ("Hermes Dashboard", "Dashboard Hermes internal", "hermes-dashboard"),
     20128: ("9router", "Router model AI", "9router"),
     20129: ("Task Router", "Routing model berbasis tugas", "hermes-task-router"),
@@ -577,6 +578,22 @@ def api_lab_chat():
     return jsonify(result)
 
 
+@app.post("/api/lab/agent")
+@login_required
+def api_lab_agent():
+    """Chat Labs dalam mode Agent — delegasi ke Hermes agent (memory/skill/terminal)."""
+    body = request.get_json(force=True) or {}
+    prompt = str(body.get("prompt", "")).strip()
+    if not prompt:
+        return jsonify(ok=False, error="Prompt kosong"), 400
+    model = str(body.get("model", ""))
+    provider = str(body.get("provider", ""))
+    result = lab_features.agent_chat(prompt, model, provider)
+    if result.get("ok"):
+        lab_operations.record_lab_exchange("", prompt, result.get("reply", ""), model or provider or "agent")
+    return jsonify(result)
+
+
 @app.get("/api/lab/activity")
 @login_required
 def api_lab_activity():
@@ -711,26 +728,10 @@ def api_lab_router_login_poll():
         return jsonify(ok=False, error=str(exc)), 400
 
 
-@app.get("/api/lab/usage/report.pdf")
+@app.get("/api/lab/failover")
 @login_required
-def api_lab_usage_pdf():
-    try: period = int(request.args.get("period", 30))
-    except ValueError: period = 30
-    data = lab_admin.usage_stats(period)
-    return send_file(io.BytesIO(lab_admin.usage_report_pdf(data)), mimetype="application/pdf",
-                     as_attachment=True, download_name=f"labs-usage-{data['period_days']}d.pdf")
-
-
-@app.get("/api/lab/models")
-@login_required
-def api_lab_models():
-    return jsonify(lab_chat.list_available_models())
-
-
-@app.get("/api/lab/9router-snapshot")
-@login_required
-def api_lab_snapshot():
-    return jsonify(lab_snapshot.get_snapshot())
+def api_lab_failover():
+    return jsonify(lab_failover.failover_status())
 
 
 @app.get("/api/lab/cron-jobs")
@@ -757,6 +758,39 @@ def api_lab_cron_job_action():
         return jsonify(ok=False, error="Parameter id/action tidak valid"), 400
     r = lab_cron.action(job_id, act)
     return jsonify(r)
+
+
+@app.post("/api/lab/failover")
+@login_required
+def api_lab_failover_toggle():
+    b = request.get_json(force=True) or {}
+    if "enabled" in b:
+        return jsonify(lab_failover.failover_set_enabled(b["enabled"]))
+    if b.get("action") == "run_now":
+        return jsonify(lab_failover.failover_tick(force_keepalive=True))
+    return jsonify(ok=False, error="unknown action"), 400
+
+
+@app.get("/api/lab/usage/report.pdf")
+@login_required
+def api_lab_usage_pdf():
+    try: period = int(request.args.get("period", 30))
+    except ValueError: period = 30
+    data = lab_admin.usage_stats(period)
+    return send_file(io.BytesIO(lab_admin.usage_report_pdf(data)), mimetype="application/pdf",
+                     as_attachment=True, download_name=f"leo2agust-labs-usage-{data['period_days']}d.pdf")
+
+
+@app.get("/api/lab/models")
+@login_required
+def api_lab_models():
+    return jsonify(lab_chat.list_available_models())
+
+
+@app.get("/api/lab/9router-snapshot")
+@login_required
+def api_lab_snapshot():
+    return jsonify(lab_snapshot.get_snapshot())
 
 @app.get("/api/lab/model-picker")
 @login_required
@@ -1026,5 +1060,6 @@ if REPORT.exists():
 if __name__ == "__main__":
     if not app.secret_key: raise RuntimeError("LABS_SECRET is required")
     if not last_audit["checks"]: threading.Thread(target=run_audit, daemon=True).start()
+    threading.Thread(target=lab_failover.scheduler_loop, kwargs={"interval": 300}, daemon=True).start()
     app.run(host="127.0.0.1", port=9118)
 

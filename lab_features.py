@@ -217,7 +217,8 @@ def _soul_system():
     """System prompt untuk chat Labs.
 
     Gabungkan persona aktif dari config.yaml (agent.system_prompt — LeoAI) dengan
-    SOUL.md (identitas root). Kalau config kosong, fallback ke SOUL.md saja.
+    SOUL.md (identitas root) + MEMORY.md/USER.md (memory Hermes) + daftar skill.
+    Kalau config kosong, fallback ke SOUL.md saja.
     """
     parts = []
     try:
@@ -235,7 +236,83 @@ def _soul_system():
                 parts.append(txt)
     except Exception:
         pass
+    mem = _memory_context()
+    if mem:
+        parts.append(mem)
+    sk = _skills_context()
+    if sk:
+        parts.append(sk)
+    vps = _vps_context()
+    if vps:
+        parts.append(vps)
     return "\n\n".join(parts).strip()
+
+
+def _vps_context():
+    """Info ringkas VPS tempat Labs berjalan — dipakai chat untuk konteks server."""
+    try:
+        import platform
+        import socket
+        host = socket.gethostname()
+        osinfo = platform.platform()
+        try:
+            import psutil
+            vm = psutil.virtual_memory()
+            ram = f"{vm.total // (1024**3)} GB"
+            up = time.time() - psutil.boot_time()
+            uptime = f"{int(up // 86400)}h {int(up % 86400 // 3600)}j {int(up % 3600 // 60)}m"
+            disk = psutil.disk_usage("/").percent
+            load = os.getloadavg()
+            load_s = ", ".join(f"{x:.2f}" for x in load)
+            ram_pct = vm.percent
+            extra = f" RAM: {ram} ({ram_pct}% dipakai), Disk: {disk}%, Load: {load_s}"
+        except Exception:
+            uptime, extra = "?", ""
+        return f"### LINGKUNGAN VPS\nHost: {host}\nOS: {osinfo}\nUptime: {uptime}{extra}"
+    except Exception:
+        return ""
+
+
+def _memory_context():
+    """MEMORY.md + USER.md Hermes sebagai konteks — biar chat tahu memory asisten."""
+    out = []
+    for fname in ("MEMORY.md", "USER.md"):
+        try:
+            p = MEMORIES_DIR / fname
+            if p.exists():
+                txt = p.read_text(errors="replace").strip()
+                if txt:
+                    label = "MEMORY (catatan asisten lintas sesi)" if fname == "MEMORY.md" else "PROFIL USER"
+                    out.append(f"### {label}\n{txt}")
+        except Exception:
+            pass
+    return "\n\n".join(out)
+
+
+def _skills_context(max_len=6000):
+    """Ringkasan skill Hermes — nama + deskripsi, dipakai chat utk tahu kapabilitas."""
+    try:
+        if not SKILLS_DIR.is_dir():
+            return ""
+        rows = []
+        for cat in sorted(p for p in SKILLS_DIR.iterdir() if p.is_dir()):
+            for sk in sorted(p for p in cat.iterdir() if p.is_dir()):
+                f = sk / "SKILL.md"
+                if not f.exists():
+                    continue
+                raw = f.read_text(errors="replace")[:800]
+                m = re.search(r"^title:\s*(.+)$", raw, re.M)
+                title = m.group(1).strip().strip('"').strip("'") if m else sk.name
+                m = re.search(r"^description:\s*\S*\s*\n?(\S.*)$", raw, re.M)
+                desc = (m.group(1).strip()[:120] if m else "")
+                if not desc:
+                    m = re.search(r"^description:\s*(.+)$", raw, re.M)
+                    desc = (m.group(1).strip()[:120] if m else "")
+                rows.append(f"- {title}: {desc}" if desc else f"- {title}")
+        text = "\n".join(rows)
+        return "### SKILLS (kapabilitas asisten)\n" + text[:max_len]
+    except Exception:
+        return ""
 
 
 def chat(messages: list, model: str = "", provider: str = "", max_tokens: int = 1500) -> dict:
@@ -302,3 +379,78 @@ def _resolve_provider_by_name(provider, model):
             m = model or next(iter(_provider_model_list(p)), "")
             return (p.get("base_url"), p.get("api_key", ""), m, p.get("extra_headers") or {})
     return None
+
+
+HERMES_PY = os.environ.get("LABS_HERMES_PY", "/home/USER/.hermes/hermes-agent/venv/bin/python")
+
+
+def agent_chat(prompt, model="", provider="", max_seconds=240):
+    """Delegasi prompt ke Hermes agent CLI — punya memory, skill, terminal, file.
+
+    Ini membuat chat Labs bertindak seperti WebUI: agent dapat menjalankan proses,
+    membaca file, dan memakai skill/memory nyata Hermes. Model default Hermes
+    dipakai bila model/provider tidak diberikan; kalau gagal 402/403, fallback
+    ke GateKey (teruji jalan).
+    """
+    if not prompt or not prompt.strip():
+        return {"ok": False, "error": "Prompt kosong"}
+    import shlex
+    cmd = [HERMES_PY, "-m", "hermes_cli.main", "-z", prompt, "--cli"]
+    if model:
+        cmd += ["-m", model]
+    if provider:
+        cmd += ["--provider", provider]
+    env = dict(os.environ,
+               HERMES_ACCEPT_HOOKS="1", XDG_RUNTIME_DIR="/run/user/1000",
+               HERMES_SAFE_MODE="0", TERM="dumb",
+               HOME=os.environ.get("LABS_HERMES_HOME", "/home/USER"),
+               HERMES_HOME=os.environ.get("LABS_HERMES_DIR", "/home/USER/.hermes"),
+               USER=os.environ.get("LABS_SYSTEM_USER", "USER"), LOGNAME=os.environ.get("LABS_SYSTEM_USER", "USER"))
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=max_seconds, env=env)
+        out = (r.stdout or "").strip()
+        if r.returncode == 0 and out:
+            return {"ok": True, "reply": out, "agent": True}
+        # gagal — coba fallback GateKey
+        err = (r.stderr or "").strip()[-200:]
+        if "402" in err or "403" in err or "balance" in err.lower():
+            return _agent_chat_gatekey(prompt)
+        return {"ok": False, "error": err or "Agent gagal (exit %d)" % r.returncode}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": f"Agent timeout ({max_seconds}s)"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
+def _agent_chat_gatekey(prompt):
+    """Fallback: kirim prompt ke GateKey (bukan agent penuh, tapi jalan)."""
+    ep = _resolve_endpoint("gatekey-unlimited-deepseek-v4-flash")
+    if not ep:
+        return {"ok": False, "error": "GateKey tidak tersedia"}
+    base_url, api_key, request_model, extra_headers = ep
+    soul = _soul_system()
+    msgs = []
+    if soul:
+        msgs.append({"role": "system", "content": soul})
+    msgs.append({"role": "user", "content": prompt})
+    body = json.dumps({"model": request_model, "messages": msgs,
+                       "max_tokens": 2000, "stream": False}).encode()
+    headers = {"Content-Type": "application/json", "Authorization": "Bearer " + api_key}
+    if isinstance(extra_headers, dict):
+        for k, v in extra_headers.items():
+            if k.lower() not in ("content-type", "authorization"):
+                headers[str(k)] = str(v)
+    try:
+        req = urllib.request.Request(base_url, data=body, headers=headers)
+        with urllib.request.urlopen(req, timeout=240) as r:
+            raw = r.read().decode("utf-8", "replace")
+        d = json.loads(raw)
+        msg = d["choices"][0]["message"]
+        reply = msg.get("content") or ""
+        if not reply.strip() and msg.get("reasoning_content"):
+            reply = msg["reasoning_content"]
+        return {"ok": True, "reply": reply.strip(), "agent": True, "fallback": "gatekey"}
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "error": f"HTTP {e.code}: {e.read()[:150].decode('utf-8','replace')}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
