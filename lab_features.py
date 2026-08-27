@@ -1,4 +1,4 @@
-"""Labs — WebUI-feature integration: chat, skills, memory, sessions.
+"""Leo2agust Lab — WebUI-feature integration: chat, skills, memory, sessions.
 Reads local Hermes data + proxies chat via 9router. All read+local actions.
 """
 import json
@@ -11,7 +11,8 @@ from pathlib import Path
 import urllib.error
 import urllib.request
 
-HERMES_DIR = Path(os.environ.get('LABS_HERMES_DIR', '/home/USER/.hermes'))
+HERMES_DIR = Path(os.environ.get("LABS_HERMES_DIR", "/home/USER/.hermes"))
+CONFIG = HERMES_DIR / "config.yaml"
 SKILLS_DIR = HERMES_DIR / "skills"
 MEMORIES_DIR = HERMES_DIR / "memories"
 WEBUI_SESSIONS_DIR = HERMES_DIR / "webui" / "sessions"
@@ -139,29 +140,165 @@ def get_session(sid: str) -> dict:
 
 
 # ---- Chat ----
-GATEKEY_URL = os.environ.get('LABS_GATEKEY_URL', 'https://ai.gatekey.cloud/v1/chat/completions')
-GATEKEY_KEY = os.environ.get('LABS_GATEKEY_KEY', '')
-GATEKEY_MODELS = ["gatekey-unlimited-deepseek-v4-flash", "gatekey-unlimited-mimo-v2.5"]
+import yaml
 
-def chat(messages: list, model: str = "gatekey-unlimited-deepseek-v4-flash",
-         max_tokens: int = 1500) -> dict:
-    """Chat completion via GateKey (verified working on this box)."""
-    body = json.dumps({"model": model, "messages": messages[-20:],
-                       "max_tokens": max_tokens, "stream": False}).encode()
-    req = urllib.request.Request(GATEKEY_URL, data=body, headers={
-        "Content-Type": "application/json", "Authorization": "Bearer " + GATEKEY_KEY})
+GATEKEY_URL = "https://ai.gatekey.cloud/v1/chat/completions"
+# GateKey API key di-resolve dari config (provider "Gatekey"), jangan hardcode.
+# GATEKEY_KEY lama dihapus — key dibaca dari config saat chat dipanggil.
+
+
+def _gatekey_key():
+    try:
+        data = yaml.safe_load(CONFIG.read_text()) or {}
+        for p in data.get("custom_providers", []) or []:
+            if isinstance(p, dict) and "gatekey" in (p.get("name", "")).lower():
+                return p.get("api_key", "") or ""
+    except Exception:
+        pass
+    return ""
+
+
+def _provider_model_list(p):
+    """Daftar model id dari sebuah provider — dukung field `models` (list/str) DAN `model` (str)."""
+    out = []
+    models = p.get("models", [])
+    if isinstance(models, str):
+        models = [models]
+    for m in models:
+        if isinstance(m, str) and m:
+            out.append(m)
+    single = p.get("model")
+    if isinstance(single, str) and single and single not in out:
+        out.append(single)
+    return out
+
+
+def _resolve_endpoint(model):
+    """Tentukan (base_url, api_key, model_request, extra_headers) dari config.
+
+    Urutan:
+    1. model gatekey-* -> endpoint GateKey dari config
+    2. cocok model dengan custom_providers (persis atau suffix) — pakai model/models field
+    3. fallback default provider dari config
+    """
+    try:
+        data = yaml.safe_load(CONFIG.read_text()) or {}
+    except Exception:
+        return None
+    provs = data.get("custom_providers", []) or []
+    # 1. GateKey
+    if str(model).startswith("gatekey-unlimited-"):
+        key = _gatekey_key()
+        if key:
+            return (GATEKEY_URL, key, model, {})
+    # 2. cocok di custom providers
+    for p in provs:
+        if not isinstance(p, dict):
+            continue
+        base = p.get("base_url")
+        key = p.get("api_key", "")
+        if not base:
+            continue
+        for m in _provider_model_list(p):
+            if m == model or m.endswith("/" + str(model)):
+                return (base, key, m, p.get("extra_headers") or {})
+    # 3. fallback default provider
+    default_model = (data.get("model") or {}).get("default", "")
+    if default_model:
+        for p in provs:
+            if not isinstance(p, dict):
+                continue
+            if default_model in _provider_model_list(p):
+                return (p.get("base_url"), p.get("api_key", ""), default_model, p.get("extra_headers") or {})
+    return None
+
+
+def _soul_system():
+    """System prompt untuk chat Labs.
+
+    Gabungkan persona aktif dari config.yaml (agent.system_prompt — LeoAI) dengan
+    SOUL.md (identitas root). Kalau config kosong, fallback ke SOUL.md saja.
+    """
+    parts = []
+    try:
+        cfg = yaml.safe_load(CONFIG.read_text()) or {}
+        sp = (cfg.get("agent") or {}).get("system_prompt", "")
+        if isinstance(sp, str) and sp.strip():
+            parts.append(sp.strip())
+    except Exception:
+        pass
+    try:
+        p = HERMES_DIR / "SOUL.md"
+        if p.exists():
+            txt = p.read_text(errors="replace").strip()
+            if txt:
+                parts.append(txt)
+    except Exception:
+        pass
+    return "\n\n".join(parts).strip()
+
+
+def chat(messages: list, model: str = "", provider: str = "", max_tokens: int = 1500) -> dict:
+    """Chat completion — resolve endpoint dari config berdasarkan model/provider.
+
+    Provider mana pun dari dropdown Labs (GateKey, B.AI, LimitRouter, Tamandata, dll)
+    dipakai sesuai base_url + api_key yang terdaftar di config.yaml.
+    System prompt dari SOUL.md (persona) disuntikkan ke awal riwayat.
+    """
+    # resolve endpoint
+    ep = _resolve_endpoint(model) if model else None
+    if not ep:
+        # coba resolve by provider name
+        ep = _resolve_provider_by_name(provider, model)
+    if not ep:
+        return {"ok": False, "error": f"Model '{model}' tidak ditemukan di config. Pilih model dari dropdown."}
+    base_url, api_key, request_model, extra_headers = ep
+    if not api_key:
+        return {"ok": False, "error": f"Provider untuk model '{model}' tidak punya API key di config."}
+
+    msgs = list(messages[-20:])
+    soul = _soul_system()
+    if soul:
+        # sisipkan system prompt di awal (jangan duplikat)
+        if not any(m.get("role") == "system" for m in msgs):
+            msgs.insert(0, {"role": "system", "content": soul})
+
+    body = json.dumps({"model": request_model, "messages": msgs,
+                        "max_tokens": max_tokens, "stream": False}).encode()
+    headers = {"Content-Type": "application/json", "Authorization": "Bearer " + api_key}
+    if isinstance(extra_headers, dict):
+        for k, v in extra_headers.items():
+            if k.lower() not in ("content-type", "authorization"):
+                headers[str(k)] = str(v)
+    req = urllib.request.Request(base_url, data=body, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=240) as r:
             raw = r.read().decode("utf-8", "replace")
         d = json.loads(raw)
         msg = d["choices"][0]["message"]
         reply = msg.get("content") or ""
-        # some models stream reasoning into content separately; fall back to reasoning if empty
         if not reply.strip() and msg.get("reasoning_content"):
             reply = msg["reasoning_content"]
-        return {"ok": True, "model": d.get("model", model), "reply": reply.strip()}
+        return {"ok": True, "model": d.get("model", request_model), "reply": reply.strip()}
     except urllib.error.HTTPError as e:
         return {"ok": False, "error": f"HTTP {e.code}",
                 "body": e.read()[:300].decode("utf-8", "replace")}
     except Exception as e:
         return {"ok": False, "error": str(e)[:300]}
+
+
+def _resolve_provider_by_name(provider, model):
+    """Fallback: resolve endpoint dengan nama provider eksplisit dari config."""
+    if not provider:
+        return None
+    try:
+        data = yaml.safe_load(CONFIG.read_text()) or {}
+    except Exception:
+        return None
+    for p in data.get("custom_providers", []) or []:
+        if not isinstance(p, dict):
+            continue
+        if str(p.get("name", "")).lower() == str(provider).lower():
+            m = model or next(iter(_provider_model_list(p)), "")
+            return (p.get("base_url"), p.get("api_key", ""), m, p.get("extra_headers") or {})
+    return None

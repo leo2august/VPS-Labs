@@ -567,12 +567,13 @@ def api_lab_session():
 def api_lab_chat():
     body = request.get_json(force=True) or {}
     messages = body.get("messages") or []
-    model = str(body.get("model", "Madefaka"))
+    model = str(body.get("model", ""))
+    provider = str(body.get("provider", ""))
     max_tokens = int(body.get("max_tokens", 1200))
-    result = lab_features.chat(messages, model, max_tokens)
+    result = lab_features.chat(messages, model, provider, max_tokens)
     if result.get("ok") and messages:
         result["session_id"] = lab_operations.record_lab_exchange(
-            str(body.get("session_id", "")), str(messages[-1].get("content", "")), result.get("reply", ""), model)
+            str(body.get("session_id", "")), str(messages[-1].get("content", "")), result.get("reply", ""), model or provider)
     return jsonify(result)
 
 
