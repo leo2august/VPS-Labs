@@ -1,0 +1,33 @@
+# Runtime / private data — never commit
+data/labs.env
+data/lab-account.json
+data/password-reset.json
+data/notifications.db
+data/lab-settings.json
+backups/
+__pycache__/
+*.pyc
+
+# Audit reports (contain host IP / ports) — never commit
+vps-audit-report*.txt
+latest-report.txt
+
+# QA / dev artifacts
+qa*.py
+qa-*.png
+screenshot*.png
+before-*.png
+
+# Backups / temp
+*.bak
+*.orig
+*.rej
+*.log
+*.tmp
+*.zip
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

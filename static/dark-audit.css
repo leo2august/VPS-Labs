@@ -1,0 +1,73 @@
+/* Labs dark-mode contrast audit — all dashboard paths */
+html[data-theme="dark"]{color-scheme:dark;--bg:#07111f;--card:#0f1d30;--ink:#edf4ff;--muted:#a9bad0;--line:#2b3e59;--navy:#e7f0ff;--indigo:#6f97d5;--washi:#101f33;--shadow:0 12px 34px rgba(0,0,0,.34);--shadow-lg:0 26px 70px rgba(0,0,0,.52)}
+html[data-theme="dark"] body{color:var(--ink);background:radial-gradient(circle at 88% -8%,rgba(51,124,183,.22),transparent 31rem),radial-gradient(circle at 4% 98%,rgba(191,54,68,.15),transparent 33rem),linear-gradient(135deg,transparent 0 49%,rgba(255,255,255,.018) 49% 50%,transparent 50% 100%),var(--bg);background-size:auto,auto,72px 72px,auto}
+html[data-theme="dark"] body:before{opacity:.38}
+html[data-theme="dark"] .main:before{content:"";position:fixed;inset:0 0 0 var(--side);pointer-events:none;z-index:-1;background:linear-gradient(115deg,rgba(91,141,202,.04),transparent 28%,rgba(227,75,75,.025) 74%,transparent),repeating-linear-gradient(0deg,transparent 0 39px,rgba(255,255,255,.018) 40px)}
+html[data-theme="dark"] h1,html[data-theme="dark"] h2,html[data-theme="dark"] h3,html[data-theme="dark"] strong,html[data-theme="dark"] .top h1,html[data-theme="dark"] .card h2,html[data-theme="dark"] .card-head h2,html[data-theme="dark"] .network-kpi b,html[data-theme="dark"] .port-number b,html[data-theme="dark"] .port-purpose strong,html[data-theme="dark"] .setting-choice-card h2,html[data-theme="dark"] .setting-config-card h2{color:#f3f7ff}
+html[data-theme="dark"] p,html[data-theme="dark"] small,html[data-theme="dark"] .page-note,html[data-theme="dark"] .top p,html[data-theme="dark"] .setting-impact{color:var(--muted)}
+html[data-theme="dark"] .card,html[data-theme="dark"] .metric,html[data-theme="dark"] .service,html[data-theme="dark"] .process,html[data-theme="dark"] .check,html[data-theme="dark"] .storage-card,html[data-theme="dark"] .iface-card,html[data-theme="dark"] .spec,html[data-theme="dark"] .provider-card,html[data-theme="dark"] .usage-token-card,html[data-theme="dark"] .usage-provider-row,html[data-theme="dark"] .quota-account,html[data-theme="dark"] .telegram-card,html[data-theme="dark"] .session-live,html[data-theme="dark"] .service-kpi,html[data-theme="dark"] .network-kpi,html[data-theme="dark"] .port-detail,html[data-theme="dark"] .setting-choice-card,html[data-theme="dark"] .setting-config-card,html[data-theme="dark"] .gateway-route-card,html[data-theme="dark"] .backup-card,html[data-theme="dark"] .model-default-card{background:linear-gradient(145deg,#122238,#0d192a);border-color:var(--line);box-shadow:var(--shadow),inset 0 1px rgba(255,255,255,.045)}
+html[data-theme="dark"] .card:hover,html[data-theme="dark"] .metric:hover,html[data-theme="dark"] .gateway-route-card:hover{border-color:#46617f}
+html[data-theme="dark"] .hero .card:first-child,html[data-theme="dark"] .status-card{background:radial-gradient(circle at 92% 0,rgba(76,144,196,.19),transparent 18rem),linear-gradient(145deg,#142844,#0c1a2d)}
+html[data-theme="dark"] .hero .card:nth-child(2){background:radial-gradient(circle at 92% 0,rgba(224,82,90,.16),transparent 16rem),linear-gradient(145deg,#1a263b,#0d192a)}
+html[data-theme="dark"] .status-grid,html[data-theme="dark"] .score-body,html[data-theme="dark"] .chart,html[data-theme="dark"] .route-facts,html[data-theme="dark"] .model-preview,html[data-theme="dark"] .account-access,html[data-theme="dark"] .access-hero,html[data-theme="dark"] .account-email-grid{background:#091729;border-color:#263c58}
+html[data-theme="dark"] .btn,html[data-theme="dark"] .filters,html[data-theme="dark"] .filters button,html[data-theme="dark"] .account-actions button,html[data-theme="dark"] .logout,html[data-theme="dark"] .clock-zone,html[data-theme="dark"] .backup-audit,html[data-theme="dark"] .model-searchbar{background:#13253b;color:#dce9fa;border-color:#314967;box-shadow:inset 0 1px rgba(255,255,255,.035)}
+html[data-theme="dark"] .btn:hover,html[data-theme="dark"] .filters button:hover{background:#19304b;border-color:#50749c}
+html[data-theme="dark"] .btn.primary{background:linear-gradient(135deg,#397bb4,#28527f);border-color:#4b83b4;color:white}
+html[data-theme="dark"] .badge,html[data-theme="dark"] .route-state,html[data-theme="dark"] .port-number span{background:#192b41;color:#c1d2e7;border-color:#334a66}
+html[data-theme="dark"] input,html[data-theme="dark"] textarea,html[data-theme="dark"] select,html[data-theme="dark"] .session-search,html[data-theme="dark"] .cm-trigger{background:#081523!important;color:#eef5ff!important;border-color:#30455f!important}
+html[data-theme="dark"] input::placeholder,html[data-theme="dark"] textarea::placeholder{color:#71859f}
+html[data-theme="dark"] .settings-tabs,html[data-theme="dark"] .access-tabs,html[data-theme="dark"] .session-tabs,html[data-theme="dark"] .quota-tabs{background:#091625;border-color:#2c405b}
+html[data-theme="dark"] .settings-tabs button,html[data-theme="dark"] .access-tab{color:#afc1d8}
+html[data-theme="dark"] .settings-tabs button.active,html[data-theme="dark"] .access-tab.active{background:#1b314c;color:#fff;box-shadow:0 5px 16px #0006}
+html[data-theme="dark"] .settings-intro,html[data-theme="dark"] .settings-intro.webui,html[data-theme="dark"] .route-summary{background:linear-gradient(125deg,#102a43,#171f34);border-color:#35516f}
+html[data-theme="dark"] .route-summary small{color:#6ed4ae}
+html[data-theme="dark"] .route-provider-option,html[data-theme="dark"] .setting-option button,html[data-theme="dark"] .backup-drop,html[data-theme="dark"] .backup-item,html[data-theme="dark"] .security-note,html[data-theme="dark"] .access-admin{background:#0a1829;color:#d9e6f7;border-color:#2c425e}
+html[data-theme="dark"] .route-provider-option.selected,html[data-theme="dark"] .setting-option button.active{background:#17344d;border-color:#4a87b4;color:#fff}
+html[data-theme="dark"] .route-runtime,html[data-theme="dark"] .log-box{background:#050d18;border:1px solid #233650}
+html[data-theme="dark"] .edit-box,html[data-theme="dark"] .modal-box,html[data-theme="dark"] .account-wizard,html[data-theme="dark"] .notification-panel,html[data-theme="dark"] .cm-panel{background:#0d1b2d;color:#edf4ff;border-color:#30455f;box-shadow:0 35px 100px #000c}
+html[data-theme="dark"] .edit-head,html[data-theme="dark"] .modal-head{background:#11233a;border-color:#2d425d}
+html[data-theme="dark"] .session-bubble.in{background:#152941;color:#e7f1ff}html[data-theme="dark"] .session-bubble.out{background:#194162;color:#fff}
+html[data-theme="dark"] code{background:#081523;color:#92d6ff;border-color:#29425e}
+html[data-theme="dark"] a{color:#7fcaff}
+/* Final semantic catch-all: generated/reused mini cards must never inherit light surfaces. */
+html[data-theme="dark"] :is(.stat,.stat-card,.kpi,.status-main,.service-overview,.service-row,.service-card,.task-card,.process-card,.check,.security-score,.security-summary,.security-card,.finding-card,.network-summary,.network-card,.port-card,.iface-card,.storage-card,.spec,.activity-stat,.activity-item,.source-row,.usage-summary,.quota-summary,.quota-card,.model-current,.model-action,.model-picker,.cleanup-card,.cfg-model-card,.full-config-card,.notification-item,.session-card,.memory-card,.skill-card,.gateway-card,.web-status-card,.alert-card,.empty){background:linear-gradient(145deg,#122238,#0d192a)!important;color:var(--ink)!important;border-color:var(--line)!important;box-shadow:inset 0 1px rgba(255,255,255,.04)}
+html[data-theme="dark"] :is(.stat,.stat-card,.kpi,.status-main,.service-overview,.service-row,.service-card,.task-card,.process-card,.check,.security-score,.security-summary,.security-card,.finding-card,.network-summary,.network-card,.port-card,.iface-card,.storage-card,.spec,.activity-stat,.activity-item,.source-row,.usage-summary,.quota-summary,.quota-card,.model-current,.model-action,.model-picker,.cleanup-card,.cfg-model-card,.full-config-card,.notification-item,.session-card,.memory-card,.skill-card,.gateway-card,.web-status-card,.alert-card,.empty) :is(h1,h2,h3,b,strong,span){color:var(--ink)}
+html[data-theme="dark"] :is(.stat,.stat-card,.kpi,.status-main,.service-overview,.service-row,.service-card,.task-card,.process-card,.check,.security-score,.security-summary,.security-card,.finding-card,.network-summary,.network-card,.port-card,.iface-card,.storage-card,.spec,.activity-stat,.activity-item,.source-row,.usage-summary,.quota-summary,.quota-card,.model-current,.model-action,.model-picker,.cleanup-card,.cfg-model-card,.full-config-card,.notification-item,.session-card,.memory-card,.skill-card,.gateway-card,.web-status-card,.alert-card,.empty) :is(p,small,label){color:var(--muted)}
+html[data-theme="dark"] :is(table,thead,tbody,tr,th,td){border-color:var(--line)}
+html[data-theme="dark"] :is(th,td){background:#0d1b2d;color:var(--ink)}
+html[data-theme="dark"] :is(.filters,.settings-tabs,.session-tabs,.quota-tabs){scrollbar-color:#486685 #0a1727}
+html[data-theme="dark"] :is(.port-protected,.live-chip,.route-locked,.up-rank,.quota-provider-avatar,.notification-icon,.notification-state){background:#19344d!important;color:#dcecff!important;border-color:#3b5877!important}
+html[data-theme="dark"] :is(.port-close.btn.danger){background:#351b27!important;color:#ff9da8!important;border-color:#783848!important}
+html[data-theme="dark"] :is(.notif-tabs,.service-filters,.session-tabs,.quota-tabs){background:#091625!important;border-color:var(--line)!important}
+html[data-theme="dark"] :is(.notif-tabs,.service-filters,.session-tabs,.quota-tabs) button{background:#102138!important;color:var(--muted)!important;border-color:transparent!important}
+html[data-theme="dark"] :is(.notif-tabs,.service-filters,.session-tabs,.quota-tabs) button.active{background:#28527f!important;color:#fff!important;border-color:#4b83b4!important}
+html[data-theme="dark"] .quota-group>header,html[data-theme="dark"] .quota-group p{background:#101f33!important;color:var(--ink)!important;border-color:var(--line)!important}
+/* Access & security surfaces (settings access tab + access modal) */
+html[data-theme="dark"] .account-access>div{background:#101f33!important;border-color:var(--line)!important;box-shadow:inset 0 1px rgba(255,255,255,.04)}
+html[data-theme="dark"] .access-hero{background:linear-gradient(125deg,#122a43,#0d1b2d)!important;border-color:#35516f!important}
+html[data-theme="dark"] .access-admin{background:#14263d!important;border-color:#3b5877!important}
+html[data-theme="dark"] .access-admin label{color:#dcecff!important}
+html[data-theme="dark"] .access-mode{background:#3a2c17!important;color:#f0c989!important}
+html[data-theme="dark"] .access-mode.safe{background:#12382c!important;color:#7ee2b4!important}
+html[data-theme="dark"] .access-mode.warn{background:#3a2c17!important;color:#f0c989!important}
+html[data-theme="dark"] .mode-options label{background:#101f33!important;border-color:var(--line)!important}
+html[data-theme="dark"] .mode-options label:has(input:checked){background:#17344d!important;border-color:#4a87b4!important;box-shadow:inset 0 0 0 1px #4a87b4!important}
+html[data-theme="dark"] .security-note{border-left-color:#4b83b4!important}
+html[data-theme="dark"] .security-note.safe{border-left-color:#4b9671!important}
+/* 9router account wizard (Provider & quota → Tambah Akun) */
+html[data-theme="dark"] .account-method{background:#101f33!important;color:var(--ink)!important;border-color:var(--line)!important}
+html[data-theme="dark"] .account-method small{color:var(--muted)!important}
+html[data-theme="dark"] .account-method.active{background:linear-gradient(135deg,#17344d,#102138)!important;border-color:#4a87b4!important;box-shadow:0 0 0 2px rgba(74,135,180,.18)!important}
+html[data-theme="dark"] .login-steps span{background:#16283f!important;color:#a9bad0!important}
+html[data-theme="dark"] .login-steps span.active{background:#28527f!important;color:#fff!important}
+html[data-theme="dark"] .device-login-box{background:#0a1829!important;border-color:#35516f!important;color:var(--ink)!important}
+html[data-theme="dark"] .device-login-box strong{color:#7fcaff!important}
+html[data-theme="dark"] .device-login-box b{color:var(--ink)!important}
+html[data-theme="dark"] .device-login-box p{color:var(--muted)!important}
+html[data-theme="dark"] .account-actions button{background:#13253b!important;color:#dce9fa!important;border-color:#314967!important}
+html[data-theme="dark"] .account-actions button.danger{color:#ff9da8!important}
+html[data-theme="dark"] .switch i{background:#3b5577!important}
+.labs-account-card{background:linear-gradient(135deg,#eef7ff,#fff5f3)}.account-email-grid{display:grid;grid-template-columns:minmax(220px,1.2fr) repeat(2,minmax(180px,1fr)) auto;gap:12px;align-items:end;padding:16px;border:1px solid var(--line);border-radius:15px}.account-password{margin-top:12px;border:1px solid var(--line);border-radius:13px;background:color-mix(in srgb,var(--card) 90%,var(--blue) 10%)}.account-password summary{padding:12px 14px;cursor:pointer;font-weight:800;color:var(--ink)}.account-password-grid{display:grid;grid-template-columns:repeat(3,minmax(150px,1fr)) auto;gap:10px;align-items:end;padding:0 14px 14px}.account-password-grid .edit-field{margin:0}html[data-theme="dark"] .account-password{background:#091729;border-color:#2b405c}.account-identity{display:flex;align-items:center;gap:12px}.account-identity small,.account-identity b,.account-identity span{display:block}.account-identity small{font-size:9px;letter-spacing:.12em;color:var(--muted)}.account-identity span{font-size:11px;color:var(--muted)}.account-avatar{display:grid!important;place-items:center;width:44px;height:44px;border-radius:14px;background:linear-gradient(145deg,var(--blue),var(--red));color:white!important;font-size:20px!important;font-weight:900}.account-email-grid .edit-field{margin:0}.labs-backup-card{grid-column:span 2;background:linear-gradient(135deg,#edf7ff,#fff7f0)}
+html[data-theme="dark"] .labs-account-card,html[data-theme="dark"] .labs-backup-card{background:radial-gradient(circle at 95% 0,rgba(226,75,75,.12),transparent 18rem),linear-gradient(145deg,#14263d,#0c192a)}
+@media(max-width:1050px){.account-email-grid{grid-template-columns:1fr 1fr}.labs-backup-card{grid-column:auto}}
+@media(max-width:620px){html[data-theme="dark"] .main:before{inset:0}.account-email-grid,.account-password-grid{grid-template-columns:1fr}.account-email-grid .btn,.account-password-grid .btn{width:100%;min-height:46px}}
