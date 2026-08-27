@@ -581,17 +581,35 @@ def api_lab_chat():
 @app.post("/api/lab/agent")
 @login_required
 def api_lab_agent():
-    """Chat Labs dalam mode Agent — delegasi ke Hermes agent (memory/skill/terminal)."""
+    """Chat Labs dalam mode Agent — delegasi ke Hermes agent (async job)."""
     body = request.get_json(force=True) or {}
     prompt = str(body.get("prompt", "")).strip()
     if not prompt:
         return jsonify(ok=False, error="Prompt kosong"), 400
     model = str(body.get("model", ""))
     provider = str(body.get("provider", ""))
-    result = lab_features.agent_chat(prompt, model, provider)
-    if result.get("ok"):
-        lab_operations.record_lab_exchange("", prompt, result.get("reply", ""), model or provider or "agent")
-    return jsonify(result)
+    job_id = lab_features.start_agent_job(prompt, model, provider)
+    if not job_id:
+        return jsonify(ok=False, error="Gagal membuat job"), 500
+    return jsonify(ok=True, job_id=job_id)
+
+
+@app.get("/api/lab/agent/status")
+@login_required
+def api_lab_agent_status():
+    job_id = str(request.args.get("job_id", ""))
+    st = lab_features.agent_job_status(job_id)
+    if st.get("status") == "done" and st.get("ok"):
+        lab_operations.record_lab_exchange("", st.get("prompt", ""), st.get("reply", ""), "agent")
+    return jsonify(st)
+
+
+@app.post("/api/lab/agent/cancel")
+@login_required
+def api_lab_agent_cancel():
+    body = request.get_json(force=True) or {}
+    job_id = str(body.get("job_id", ""))
+    return jsonify(ok=lab_features.cancel_agent_job(job_id))
 
 
 @app.get("/api/lab/activity")

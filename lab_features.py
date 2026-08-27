@@ -383,43 +383,123 @@ def _resolve_provider_by_name(provider, model):
 
 HERMES_PY = os.environ.get("LABS_HERMES_PY", "/home/USER/.hermes/hermes-agent/venv/bin/python")
 
+# ---- Agent job manager (async) ----
+import threading
+AGENT_JOBS = {}
+_AGENT_LOCK = threading.Lock()
 
-def agent_chat(prompt, model="", provider="", max_seconds=240):
-    """Delegasi prompt ke Hermes agent CLI — punya memory, skill, terminal, file.
 
-    Ini membuat chat Labs bertindak seperti WebUI: agent dapat menjalankan proses,
-    membaca file, dan memakai skill/memory nyata Hermes. Model default Hermes
-    dipakai bila model/provider tidak diberikan; kalau gagal 402/403, fallback
-    ke GateKey (teruji jalan).
-    """
-    if not prompt or not prompt.strip():
-        return {"ok": False, "error": "Prompt kosong"}
-    import shlex
+def _new_job_id():
+    return "agent_" + os.urandom(6).hex()
+
+
+def _agent_env():
+    return dict(os.environ,
+                HERMES_ACCEPT_HOOKS="1", XDG_RUNTIME_DIR="/run/user/1000",
+                HERMES_SAFE_MODE="0", TERM="dumb",
+                HOME=os.environ.get("LABS_HERMES_HOME", "/home/USER"),
+                HERMES_HOME=os.environ.get("LABS_HERMES_DIR", "/home/USER/.hermes"),
+                USER=os.environ.get("LABS_SYSTEM_USER", "USER"),
+                LOGNAME=os.environ.get("LABS_SYSTEM_USER", "USER"))
+
+
+def _run_agent_job(job_id, prompt, model, provider):
+    """Jalankan hermes -z di background thread; hasil disimpan ke AGENT_JOBS."""
     cmd = [HERMES_PY, "-m", "hermes_cli.main", "-z", prompt, "--cli"]
     if model:
         cmd += ["-m", model]
     if provider:
         cmd += ["--provider", provider]
-    env = dict(os.environ,
-               HERMES_ACCEPT_HOOKS="1", XDG_RUNTIME_DIR="/run/user/1000",
-               HERMES_SAFE_MODE="0", TERM="dumb",
-               HOME=os.environ.get("LABS_HERMES_HOME", "/home/USER"),
-               HERMES_HOME=os.environ.get("LABS_HERMES_DIR", "/home/USER/.hermes"),
-               USER=os.environ.get("LABS_SYSTEM_USER", "USER"), LOGNAME=os.environ.get("LABS_SYSTEM_USER", "USER"))
+    proc = None
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=max_seconds, env=env)
-        out = (r.stdout or "").strip()
-        if r.returncode == 0 and out:
-            return {"ok": True, "reply": out, "agent": True}
-        # gagal — coba fallback GateKey
-        err = (r.stderr or "").strip()[-200:]
-        if "402" in err or "403" in err or "balance" in err.lower():
-            return _agent_chat_gatekey(prompt)
-        return {"ok": False, "error": err or "Agent gagal (exit %d)" % r.returncode}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": f"Agent timeout ({max_seconds}s)"}
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, env=_agent_env())
+        with _AGENT_LOCK:
+            if job_id in AGENT_JOBS and AGENT_JOBS[job_id].get("cancel"):
+                proc.kill()
+                with _AGENT_LOCK:
+                    AGENT_JOBS[job_id].update(status="cancelled", done=True)
+                return
+            AGENT_JOBS[job_id]["proc"] = proc
+        out, err = proc.communicate(timeout=600)
+        out_s = (out or "").strip()
+        err_s = (err or "").strip()
+        rc = proc.returncode
+        with _AGENT_LOCK:
+            was_cancelled = bool(AGENT_JOBS.get(job_id, {}).get("cancel"))
+        if was_cancelled:
+            with _AGENT_LOCK:
+                AGENT_JOBS[job_id].update(status="cancelled", done=True, ok=False)
+            return
+        # deteksi kegagalan provider di stdout ATAU stderr (402/403/balance)
+        combined = (out_s + " " + err_s).lower()
+        if rc == 0 and out_s and not _looks_like_provider_error(combined):
+            result = {"status": "done", "done": True, "reply": out_s, "ok": True, "agent": True}
+        elif _looks_like_provider_error(combined):
+            fb = _agent_chat_gatekey(prompt)
+            result = {"status": "done", "done": True, "ok": fb.get("ok"),
+                      "reply": fb.get("reply", ""), "agent": True, "fallback": fb.get("fallback")}
+            if not fb.get("ok"):
+                result["error"] = fb.get("error")
+        else:
+            result = {"status": "error", "done": True, "ok": False,
+                      "error": err_s[-300:] or f"Agent gagal (exit {rc})"}
+        with _AGENT_LOCK:
+            AGENT_JOBS[job_id].update(result)
     except Exception as e:
-        return {"ok": False, "error": str(e)[:300]}
+        if proc and proc.poll() is None:
+            proc.kill()
+        with _AGENT_LOCK:
+            AGENT_JOBS[job_id].update(status="error", done=True, ok=False,
+                                      error=str(e)[:300])
+    finally:
+        with _AGENT_LOCK:
+            if job_id in AGENT_JOBS:
+                AGENT_JOBS[job_id]["proc"] = None
+
+
+def _looks_like_provider_error(text):
+    return any(k in text for k in ("http 402", "http 403", "http 429",
+                                   "insufficient balance", "402 payment",
+                                   "quota", "rate limit", "x-relay-target",
+                                   "authentication_required"))
+
+
+def start_agent_job(prompt, model="", provider=""):
+    """Mulai agent job async. Return job_id."""
+    if not prompt or not prompt.strip():
+        return None
+    job_id = _new_job_id()
+    with _AGENT_LOCK:
+        AGENT_JOBS[job_id] = {"id": job_id, "status": "running", "done": False,
+                              "cancel": False, "proc": None, "prompt": prompt[:100]}
+    t = threading.Thread(target=_run_agent_job, args=(job_id, prompt, model, provider),
+                         daemon=True)
+    t.start()
+    return job_id
+
+
+def agent_job_status(job_id):
+    with _AGENT_LOCK:
+        j = AGENT_JOBS.get(job_id)
+        if not j:
+            return {"status": "error", "done": True, "ok": False, "error": "Job tidak dikenal"}
+        return {k: v for k, v in j.items() if k != "proc"}
+
+
+def cancel_agent_job(job_id):
+    with _AGENT_LOCK:
+        j = AGENT_JOBS.get(job_id)
+        if not j:
+            return False
+        j["cancel"] = True
+        proc = j.get("proc")
+    if proc and proc.poll() is None:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    return True
 
 
 def _agent_chat_gatekey(prompt):
