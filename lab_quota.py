@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 BACKUPS = Path(__file__).resolve().parent / "backups"
-LIVE_DB = Path("/home/ubuntu/.9router/db/data.sqlite")
+LIVE_DB = Path(os.environ.get("LABS_9ROUTER_DB", "/home/USER/.9router/db/data.sqlite"))
 LIVE_API = "http://127.0.0.1:20128/api/providers"
 
 

@@ -431,7 +431,7 @@ def system_info():
 
 
 def _cache_stats():
-    roots = (Path("/home/ubuntu/.cache"), Path("/var/cache/apt/archives"))
+    roots = (Path(os.environ.get("LABS_CACHE_DIR", "/home/USER/.cache")), Path("/var/cache/apt/archives"))
     total = files = 0
     for root in roots:
         if not root.exists():
@@ -467,7 +467,7 @@ def storage_cleanup():
             return jsonify(ok=False, error=str(exc)), 500
     elif action == "cache":
         # Cache only: never touch app data, config, logs, or running processes.
-        roots = (Path("/home/ubuntu/.cache"), Path("/var/cache/apt/archives"))
+        roots = (Path(os.environ.get("LABS_CACHE_DIR", "/home/USER/.cache")), Path("/var/cache/apt/archives"))
         for root in roots:
             if not root.exists():
                 continue

@@ -34,7 +34,7 @@ def ssh_access_status() -> dict:
             if key in {"passwordauthentication", "pubkeyauthentication", "permitrootlogin"}:
                 values[key] = value
         users = []
-        for user, home in (("root", Path("/root")), ("ubuntu", Path("/home/ubuntu"))):
+        for user, home in (("root", Path("/root")), ("ubuntu", Path("/home/USER"))):
             auth = home / ".ssh" / "authorized_keys"
             count = 0
             try:
@@ -52,7 +52,7 @@ def generate_ssh_key(user: str, admin_password: str) -> dict:
     """Generate Ed25519 key, install public half, return private half once."""
     if error := _authorize(admin_password):
         return error
-    homes = {"root": Path("/root"), "ubuntu": Path("/home/ubuntu")}
+    homes = {"root": Path("/root"), "ubuntu": Path("/home/USER")}
     if user not in homes:
         return {"ok": False, "error": "hanya root/ubuntu"}
     import pwd

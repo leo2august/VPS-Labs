@@ -99,7 +99,7 @@ def router_status() -> dict:
             pass
     # limits from snapshot
     try:
-        snap = json.loads(Path("/home/ubuntu/vps-audit/static/9router-snapshot.json").read_text())
+        snap = json.loads(Path(__file__).resolve().parent / "static" / "9router-snapshot.json".read_text())
         limits = {"providers_total": snap.get("providers_total", 0),
                   "providers_active": snap.get("providers_active", 0),
                   "models_total": snap.get("models_total", 0)}

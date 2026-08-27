@@ -4,7 +4,7 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent / 'backups'
 IMPORTS = ROOT / 'imports'
-ROUTER = Path('/home/ubuntu/.9router')
+ROUTER = Path(os.environ.get('LABS_9ROUTER_DB', '/home/USER/.9router/db/data.sqlite')).parent
 WEBUI = Path(os.environ.get('LABS_HERMES_DIR', '/home/USER/.hermes')) / 'webui'
 LABS = Path(__file__).resolve().parent
 LAB_FILES = [
