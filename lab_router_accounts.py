@@ -266,9 +266,19 @@ def test_account(account_id):
         raw = _account_data(account_id)
         base = _base_url(raw)
         if not base:
-            # OAuth provider without public base URL; check token expiry + model list
+            # OAuth provider without public base URL; check refresh token + model list
             if str(raw.get("provider", "")).lower() in OAUTH_PROVIDERS:
+                locked = sorted(k.replace("modelLock_", "", 1) for k, v in raw.items() if k.startswith("modelLock_") and v)
+                refresh = raw.get("refreshToken") or ""
                 expires = raw.get("expiresAt") or ""
+                if not refresh and not _auth_token(raw):
+                    return {"ok": True, "result": {"valid": False, "error": "kredensial tidak tersedia"}}
+                if refresh:
+                    # refresh token available -> 9router will auto-refresh; treat as valid
+                    extra = f" · access token sampai {expires[:10]}" if expires else ""
+                    msg = f"token OAuth valid (refresh otomatis tersedia){extra}" + (f" · {len(locked)} model" if locked else "")
+                    return {"ok": True, "result": {"valid": True, "note": msg, "models": locked}}
+                # no refresh token: fall back to access token expiry check
                 expired = False
                 if expires:
                     try:
@@ -276,11 +286,9 @@ def test_account(account_id):
                         expired = datetime.fromisoformat(str(expires).replace("Z", "+00:00")) < datetime.now(timezone.utc)
                     except ValueError:
                         pass
-                locked = sorted(k.replace("modelLock_", "", 1) for k, v in raw.items() if k.startswith("modelLock_") and v)
                 if expired:
                     return {"ok": True, "result": {"valid": False, "error": f"token kedaluwarsa ({expires[:10]})"}}
-                msg = f"token OAuth valid" + (f" ({len(locked)} model)" if locked else "")
-                return {"ok": True, "result": {"valid": True, "note": msg, "models": locked}}
+                return {"ok": True, "result": {"valid": True, "note": "token OAuth valid", "models": locked}}
             return {"ok": True, "result": {"valid": False, "error": "base URL tidak diketahui untuk provider ini (mode offline)"}}
         token = _auth_token(raw)
         if not token:
