@@ -50,6 +50,68 @@ class RouterAccountsOfflineTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 ra.update_provider_accounts("tidak-ada", True)
 
+    def test_base_url_resolution(self):
+        """base URL from providerSpecificData wins; defaults used otherwise."""
+        raw = {"provider": "deepseek", "providerSpecificData": {"baseUrl": "https://custom.example/v1"}}
+        self.assertEqual(ra._base_url(raw), "https://custom.example/v1")
+        self.assertEqual(ra._base_url({"provider": "deepseek"}), "https://api.deepseek.com/v1")
+        self.assertEqual(ra._base_url({"provider": "groq"}), "https://api.groq.com/openai/v1")
+        self.assertIsNone(ra._base_url({"provider": "kiro"}))
+
+    def test_first_model_prefers_default(self):
+        """defaultModel preferred over modelLock_ entries."""
+        raw = {"defaultModel": "m-default", "modelLock_a": True, "modelLock_b": True}
+        self.assertEqual(ra._first_model(raw), "m-default")
+        self.assertEqual(ra._first_model({"modelLock_claude-sonnet": True}), "claude-sonnet")
+        self.assertEqual(ra._first_model({}), "")
+
+    def test_offline_test_account_valid(self):
+        """Offline test returns valid + latency when provider responds 200."""
+        raw = {"provider": "deepseek", "apiKey": "sk-test", "defaultModel": "deepseek-chat"}
+        with patch.object(ra, "_account_data", return_value=raw), \
+             patch.object(ra, "_offline_http", return_value=(200, b'{"choices":[{"text":"ok"}]}')):
+            result = ra.test_account("abc")
+        self.assertEqual(result["mode"], "db")
+        self.assertTrue(result["result"]["valid"])
+        self.assertIn("latency_ms", result["result"])
+
+    def test_offline_test_account_invalid(self):
+        """Offline test reports invalid on HTTP error."""
+        raw = {"provider": "deepseek", "apiKey": "sk-test", "defaultModel": "deepseek-chat"}
+        with patch.object(ra, "_account_data", return_value=raw), \
+             patch.object(ra, "_offline_http", return_value=(401, b'{"error":"bad key"}')):
+            result = ra.test_account("abc")
+        self.assertFalse(result["result"]["valid"])
+        self.assertEqual(result["result"]["error"], "HTTP 401")
+
+    def test_offline_account_models_http(self):
+        """Offline models: HTTP /models parsed into list."""
+        raw = {"provider": "deepseek", "apiKey": "sk-test"}
+        body = b'{"data":[{"id":"deepseek-chat"},{"id":"deepseek-reasoner"}]}'
+        with patch.object(ra, "_account_data", return_value=raw), \
+             patch.object(ra, "_offline_http", return_value=(200, body)):
+            result = ra.account_models("abc")
+        self.assertEqual(result["models"], ["deepseek-chat", "deepseek-reasoner"])
+
+    def test_offline_account_models_fallback_locked(self):
+        """Offline models falls back to modelLock_ keys when HTTP fails."""
+        raw = {"provider": "kiro", "accessToken": "tok", "modelLock_z": True, "modelLock_a": True}
+        with patch.object(ra, "_account_data", return_value=raw), \
+             patch.object(ra, "_offline_http", return_value=(403, b'{"error":"no"}')):
+            result = ra.account_models("abc")
+        self.assertEqual(result["models"], ["a", "z"])
+
+    def test_offline_delete_writes_db(self):
+        """Offline delete removes row from SQLite."""
+        with patch.object(ra, "_call", side_effect=ValueError("9router tidak aktif")), \
+             patch.object(ra, "sqlite3") as sql:
+            con = sql.Mock()
+            sql.connect.return_value = con
+            result = ra.delete_account("abc")
+        con.execute.assert_called_once_with("DELETE FROM providerConnections WHERE id=?", ("abc",))
+        con.commit.assert_called_once()
+        self.assertEqual(result["mode"], "db")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

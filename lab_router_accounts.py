@@ -14,6 +14,17 @@ BASE = "http://127.0.0.1:20128"
 LIVE_DB = Path(os.environ.get("LABS_9ROUTER_DB", "/home/ubuntu/.9router/db/data.sqlite"))
 DEVICE_PROVIDERS = {"kiro", "github", "qwen"}
 API_KEY_PROVIDERS = {"openrouter", "glm", "minimax", "gemini", "deepseek", "openai"}
+# Default OpenAI-compatible base URLs for providers that don't store one in DB.
+DEFAULT_BASE_URLS = {
+    "openai": "https://api.openai.com/v1",
+    "deepseek": "https://api.deepseek.com/v1",
+    "openrouter": "https://openrouter.ai/api/v1",
+    "groq": "https://api.groq.com/openai/v1",
+    "glm": "https://open.bigmodel.cn/api/paas/v4",
+    "minimax": "https://api.minimax.chat/v1",
+    "nvidia": "https://integrate.api.nvidia.com/v1",
+    "github": "https://models.github.ai/api",
+}
 _flows = {}
 _lock = threading.Lock()
 
@@ -116,19 +127,136 @@ def update_provider_accounts(provider, enabled):
         return result
 
 
+def _account_data(account_id):
+    """Read a single provider connection from the DB + merge its data JSON."""
+    con = sqlite3.connect(f"file:{LIVE_DB}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    try:
+        row = con.execute("SELECT * FROM providerConnections WHERE id=?", (_id(account_id),)).fetchone()
+    finally:
+        con.close()
+    if not row:
+        raise ValueError("akun tidak ditemukan")
+    raw = dict(row)
+    raw.update(json.loads(raw.pop("data") or "{}"))
+    return raw
+
+
+def _base_url(raw):
+    """Resolve the provider's OpenAI-compatible base URL."""
+    psd = raw.get("providerSpecificData") or {}
+    bu = psd.get("baseUrl") or raw.get("baseUrl") or ""
+    if bu:
+        return bu.rstrip("/")
+    prov = str(raw.get("provider", "")).lower()
+    # strip UUID suffix for openai-compatible-xxx to get the base name
+    for known in ("openai", "anthropic"):
+        if prov.startswith(known):
+            return DEFAULT_BASE_URLS.get(known)
+    if prov in DEFAULT_BASE_URLS:
+        return DEFAULT_BASE_URLS[prov]
+    # try wildcard prefix match
+    match = [v for k, v in DEFAULT_BASE_URLS.items() if prov.startswith(k)]
+    if match:
+        return match[0]
+    return None
+
+
+def _auth_token(raw):
+    """Get the bearer token (apiKey or accessToken) for the account."""
+    return raw.get("apiKey") or raw.get("accessToken") or ""
+
+
+def _first_model(raw):
+    """Pick the first locked model from data, or defaultModel, or a fallback."""
+    m = raw.get("defaultModel") or ""
+    if m:
+        return m
+    for k, v in raw.items():
+        if k.startswith("modelLock_") and v:
+            return k.replace("modelLock_", "", 1)
+    return ""
+
+
+def _offline_http(method, url, headers, body=None, timeout=10):
+    """Wrapper for urllib with timeout, returns (status, body_bytes)."""
+    req = urllib.request.Request(url, data=body, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            return res.status, res.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read()
+    except urllib.error.URLError as exc:
+        return 0, str(exc.reason).encode()
+
+
 def test_account(account_id):
-    data = _call("POST", f"/api/providers/{_id(account_id)}/test")
-    return {"ok": True, "result": data}
+    try:
+        data = _call("POST", f"/api/providers/{_id(account_id)}/test")
+        return {"ok": True, "mode": "api", "result": data}
+    except ValueError:
+        raw = _account_data(account_id)
+        base = _base_url(raw)
+        if not base:
+            return {"ok": True, "result": {"valid": False, "error": "base URL tidak diketahui untuk provider ini (mode offline)"}}
+        token = _auth_token(raw)
+        if not token:
+            return {"ok": True, "result": {"valid": False, "error": "kredensial tidak tersedia"}}
+        model = _first_model(raw) or "gpt-3.5-turbo"
+        import time
+        t0 = time.time()
+        payload = json.dumps({"model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}).encode()
+        status, body = _offline_http("POST", f"{base}/chat/completions",
+                                     {"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+                                     body=payload)
+        ms = int((time.time() - t0) * 1000)
+        if status == 200:
+            return {"ok": True, "mode": "db", "result": {"valid": True, "latency_ms": ms}}
+        detail = "no response" if status == 0 else f"HTTP {status}"
+        return {"ok": True, "mode": "db", "result": {"valid": False, "latency_ms": ms, "error": detail}}
 
 
 def account_models(account_id):
-    data = _call("GET", f"/api/providers/{_id(account_id)}/models")
-    return {"ok": True, **data}
+    try:
+        data = _call("GET", f"/api/providers/{_id(account_id)}/models")
+        return {"ok": True, "mode": "api", **data}
+    except ValueError:
+        raw = _account_data(account_id)
+        # first try HTTP /models
+        base = _base_url(raw)
+        if base:
+            token = _auth_token(raw)
+            if token:
+                status, body = _offline_http("GET", f"{base}/models", {"Authorization": f"Bearer {token}"})
+                if status == 200:
+                    try:
+                        models = [m.get("id") or m.get("name") for m in json.loads(body).get("data", []) if m.get("id") or m.get("name")]
+                        if models:
+                            return {"ok": True, "mode": "db", "models": models}
+                    except (json.JSONDecodeError, TypeError, KeyError):
+                        pass
+        # fallback: return locked-models from data
+        locked = sorted(k.replace("modelLock_", "", 1) for k, v in raw.items() if k.startswith("modelLock_") and v)
+        if locked:
+            return {"ok": True, "mode": "db", "models": locked}
+        return {"ok": True, "mode": "db", "models": []}
 
 
 def delete_account(account_id):
-    _call("DELETE", f"/api/providers/{_id(account_id)}")
-    return {"ok": True}
+    try:
+        _call("DELETE", f"/api/providers/{_id(account_id)}")
+        return {"ok": True, "mode": "api"}
+    except ValueError:
+        aid = _id(account_id)
+        if not LIVE_DB.exists():
+            raise ValueError("database 9router tidak ditemukan untuk mode offline")
+        con = sqlite3.connect(str(LIVE_DB))
+        try:
+            con.execute("DELETE FROM providerConnections WHERE id=?", (aid,))
+            con.commit()
+        finally:
+            con.close()
+        return {"ok": True, "mode": "db"}
 
 
 def create_api_key(provider, name, api_key):
