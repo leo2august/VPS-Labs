@@ -20,12 +20,13 @@ import lab_chat
 import lab_snapshot
 import lab_crud
 import lab_webui
+import lab_operations
 import lab_provider
 import lab_proxy
+import lab_quota
+import lab_oauth
 import lab_security
 import lab_backup
-import lab_operations
-import lab_quota
 import lab_router_accounts
 import lab_failover
 import lab_account
@@ -1284,6 +1285,7 @@ if __name__ == "__main__":
         pass
     if not last_audit["checks"]: threading.Thread(target=run_audit, daemon=True).start()
     threading.Thread(target=lab_failover.scheduler_loop, kwargs={"interval": 300}, daemon=True).start()
+    lab_oauth.start_refresh_loop()
     # Default tetap privat. Set NUVULABS_HOST=0.0.0.0 hanya untuk akses IP yang dibatasi firewall/VPN.
     app.run(host=os.environ.get("NUVULABS_HOST", "127.0.0.1"), port=int(os.environ.get("NUVULABS_PORT", "9118")))
 

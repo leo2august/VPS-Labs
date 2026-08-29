@@ -16,7 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from lab_db import connect_read, connect_write
@@ -258,3 +258,99 @@ def poll_device_login(flow_id):
 
 if __name__ == "__main__":
     print("lab_oauth self-check OK; supported:", ", ".join(FLOWS))
+
+
+# ---------------------------------------------------------------------------
+# Token refresh loop (background)
+# ---------------------------------------------------------------------------
+import threading
+
+_REFRESH_INTERVAL = 50 * 60  # 50 minutes
+_refresh_lock = threading.Lock()
+_refresh_timer = None
+
+
+def _refresh_one(row):
+    """Try to refresh an OAuth account token. Returns (account_id, ok, note)."""
+    rid = str(row["id"])
+    data = json.loads(row["data"] or "{}")
+    refresh = data.get("refreshToken") or ""
+    if not refresh:
+        return rid, None, "no refresh token"
+    expires = data.get("expiresAt") or ""
+    # skip if token still has > 15 min life (avoid hammering provider)
+    if expires:
+        try:
+            exp = datetime.fromisoformat(str(expires).replace("Z", "+00:00"))
+            remaining = exp - datetime.now(timezone.utc)
+            if remaining > timedelta(minutes=15):
+                return rid, None, f"ok until {expires[:10]}"
+        except ValueError:
+            pass
+    psd = data.get("providerSpecificData") or {}
+    client_id = psd.get("clientId") or data.get("clientId")
+    client_secret = psd.get("clientSecret") or data.get("clientSecret")
+    region = psd.get("region") or "us-east-1"
+    if not client_id:
+        return rid, False, "no client_id"
+    # AWS IAM Identity Center token endpoint (kiro)
+    status, resp = _post_form(
+        f"{AWS_OIDC}/token",
+        {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh,
+            "client_id": client_id,
+            **({"client_secret": client_secret} if client_secret else {}),
+        },
+        timeout=20,
+    )
+    if status < 400 and ("access_token" in resp or "accessToken" in resp):
+        _store_oauth_tokens(rid, resp)
+        return rid, True, "refreshed"
+    return rid, False, f"refresh failed HTTP {status}"
+
+
+def refresh_all(verbose=False):
+    """Scan accounts and refresh OAuth tokens nearing expiry."""
+    results = {"ok": 0, "failed": 0, "skipped": 0, "details": []}
+    db = connect_read()
+    try:
+        rows = db.execute(
+            "SELECT id, provider, data FROM providerConnections WHERE data LIKE '%refreshToken%'"
+        ).fetchall()
+    finally:
+        db.close()
+    for row in rows:
+        rid, ok, note = _refresh_one(row)
+        if ok is None:
+            results["skipped"] += 1
+        elif ok:
+            results["ok"] += 1
+        else:
+            results["failed"] += 1
+        if verbose:
+            results["details"].append(f"{rid[:12]} {note}")
+    return results
+
+
+def _refresh_tick():
+    global _refresh_timer
+    try:
+        refresh_all()
+    except Exception:
+        pass
+    _refresh_timer = threading.Timer(_REFRESH_INTERVAL, _refresh_tick)
+    _refresh_timer.daemon = True
+    _refresh_timer.start()
+
+
+def start_refresh_loop():
+    """Start the background token refresh loop (idempotent)."""
+    global _refresh_timer
+    with _refresh_lock:
+        if _refresh_timer and _refresh_timer.is_alive():
+            return {"ok": True, "note": "already running"}
+        _refresh_timer = threading.Timer(_REFRESH_INTERVAL, _refresh_tick)
+        _refresh_timer.daemon = True
+        _refresh_timer.start()
+        return {"ok": True, "note": "refresh loop started"}
