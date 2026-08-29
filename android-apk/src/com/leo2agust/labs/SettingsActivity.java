@@ -103,15 +103,33 @@ public class SettingsActivity extends Activity {
         });
 
         // Section: Bottom nav
-        root.addView(sectionLabel("NAVIGASI BAWAH · MAKSIMAL 5 MENU"));
+        root.addView(sectionLabel("PILIH MENU NAVIGASI BAWAH"));
+        TextView navIntro = new TextView(this);
+        navIntro.setText("Pilih maksimal 5 menu. Pengaturan selalu tersedia di sisi kanan.");
+        navIntro.setTextSize(12);
+        navIntro.setTextColor(Color.parseColor("#66758a"));
+        navIntro.setPadding(0, 0, 0, dp(10));
+        root.addView(navIntro);
+
+        final String[] menuNames = {
+            "Ringkasan", "Performa", "Layanan", "Chat AI", "Attachment",
+            "Aktivitas", "Keamanan", "Penyimpanan", "Pemakaian", "Notifikasi",
+            "Router", "Kuota Provider", "Backup & Restore", "Pembaruan", "Sesi", "Konfigurasi"
+        };
+        LinearLayout navCard = new LinearLayout(this);
+        navCard.setOrientation(LinearLayout.VERTICAL);
+        navCard.setPadding(dp(12), dp(8), dp(12), dp(8));
+        navCard.setBackground(rounded(Color.parseColor("#fffdfa"), Color.parseColor("#d8d2c5")));
         for (int i = 0; i < MainActivity.NAV_ITEMS.length; i++) {
             final CheckBox cb = new CheckBox(this);
-            cb.setText(MainActivity.NAV_ITEMS[i][2] + "   " + MainActivity.NAV_ITEMS[i][1]);
+            cb.setText(menuNames[i]);
             cb.setTextSize(14);
+            cb.setTypeface(null, Typeface.BOLD);
             cb.setTextColor(Color.parseColor("#17243d"));
+            cb.setMinHeight(dp(46));
             boolean defaultOn = "1".equals(MainActivity.NAV_ITEMS[i][3]);
             cb.setChecked(prefs.getBoolean("tab_" + MainActivity.NAV_ITEMS[i][0], defaultOn));
-            cb.setPadding(dp(4), dp(4), 0, dp(4));
+            cb.setPadding(dp(4), 0, 0, 0);
             cb.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
                     if (cb.isChecked() && selectedTabCount() > 5) {
@@ -123,14 +141,15 @@ public class SettingsActivity extends Activity {
                 }
             });
             tabChecks[i] = cb;
-            root.addView(cb);
+            navCard.addView(cb);
         }
+        root.addView(navCard);
 
         TextView navHelp = new TextView(this);
-        navHelp.setText("Pilih menu sesuai kebutuhan. Settings selalu tersedia di sisi kanan.");
+        navHelp.setText("Menu terpilih tampil berurutan seperti daftar di atas.");
         navHelp.setTextSize(11);
-        navHelp.setTextColor(Color.parseColor("#8896a8"));
-        navHelp.setPadding(0, dp(6), 0, dp(18));
+        navHelp.setTextColor(Color.parseColor("#66758a"));
+        navHelp.setPadding(0, dp(7), 0, dp(18));
         root.addView(navHelp);
 
         // Save button

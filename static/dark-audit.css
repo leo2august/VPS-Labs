@@ -138,3 +138,12 @@ html[data-theme="dark"] #service-ctrl :is(p,small,span),
 html[data-theme="dark"] #sessions :is(p,small,time),
 html[data-theme="dark"] #cron :is(p,small),
 html[data-theme="dark"] #settings :is(p,small){text-shadow:none}
+/* Final contrast sweep: neutralize remaining light-only surfaces across all pages. */
+html[data-theme="dark"] :is(.alert-card.danger,.alert-card.warn,.service,.check,.filters button.active,.notif-panel,.table-wrap,thead th,tbody tr:hover,.attach-dialog,.attach-item,.attachment-card,.cron-card,.cron-kpi .kpi,.cron-source,.session-card,.job-card,.update-card,.update-target,.update-flow span,.settings-panel,.edit-modal,.edit-sheet,.modal-card,.access-pane,.security-note,.choice-card){background-color:#0f1d30!important;color:#edf4ff!important;border-color:#344b68!important}
+html[data-theme="dark"] :is(.alert-card.danger,.alert-card.warn,.service,.check,.attachment-card,.cron-card,.session-card,.job-card,.update-card,.choice-card){background-image:linear-gradient(145deg,#122238,#0d192a)!important}
+html[data-theme="dark"] :is(input,select,textarea,option,.search-box,.model-search,.setting-select,.setting-text){background:#091729!important;color:#edf4ff!important;border-color:#344b68!important}
+html[data-theme="dark"] :is(input,textarea)::placeholder{color:#8fa4bf!important;opacity:1}
+html[data-theme="dark"] :is(table,td,th,label,summary,.card,.service,.check,.process,.session-card,.job-card,.cron-card,.update-card,.attachment-card,.attach-dialog,.settings-panel) :is(b,strong,h1,h2,h3,h4,label,span:not(.badge):not(.tag)){color:inherit}
+html[data-theme="dark"] :is(.badge,.tag,.btn.primary,.danger-btn,.attach-delete-confirm){color:#fff!important}
+html[data-theme="dark"] .attach-dialog{background:#0f1d30!important;color:#edf4ff!important;box-shadow:0 34px 100px rgba(0,0,0,.75)!important}
+html[data-theme="dark"] .attach-modal-backdrop{background:rgba(2,7,15,.9)!important}
