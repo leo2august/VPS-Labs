@@ -14,6 +14,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 public class LabsStatusWidget extends AppWidgetProvider {
+    @Override public void onEnabled(Context context) { WidgetHttp.scheduleAutoRefresh(context); }
     @Override public void onReceive(Context context, Intent intent) {
         super.onReceive(context, intent);
         if ("com.leo2agust.labs.REFRESH_WIDGET".equals(intent.getAction())) {

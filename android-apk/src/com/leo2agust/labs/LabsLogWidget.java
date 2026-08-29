@@ -12,6 +12,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class LabsLogWidget extends AppWidgetProvider {
+    @Override public void onEnabled(Context context) { WidgetHttp.scheduleAutoRefresh(context); }
     @Override public void onReceive(Context context, Intent intent) {
         super.onReceive(context, intent);
         if ("com.leo2agust.labs.REFRESH_WIDGET".equals(intent.getAction())) {

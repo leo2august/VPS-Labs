@@ -147,3 +147,19 @@ html[data-theme="dark"] :is(table,td,th,label,summary,.card,.service,.check,.pro
 html[data-theme="dark"] :is(.badge,.tag,.btn.primary,.danger-btn,.attach-delete-confirm){color:#fff!important}
 html[data-theme="dark"] .attach-dialog{background:#0f1d30!important;color:#edf4ff!important;box-shadow:0 34px 100px rgba(0,0,0,.75)!important}
 html[data-theme="dark"] .attach-modal-backdrop{background:rgba(2,7,15,.9)!important}
+/* Screenshot audit v1.0.7: services/task manager, cron tabs, provider quota. */
+html[data-theme="dark"] .service.off{background:linear-gradient(145deg,#211b2a,#0d192a)!important}
+html[data-theme="dark"] .service-meta>div{background:#091729!important;color:#edf4ff!important;border:1px solid #2b405c!important}
+html[data-theme="dark"] .service-meta :is(b,small){color:inherit!important}
+html[data-theme="dark"] .service-state{background:#153929!important;color:#8de0b8!important;border:1px solid #286044!important}
+html[data-theme="dark"] .service.off .service-state{background:#3a1d29!important;color:#ff9da8!important;border-color:#743746!important}
+html[data-theme="dark"] .cron-tabs{position:sticky;top:68px;z-index:9;padding:6px;background:#091625!important;border:1px solid #2b405c;border-radius:13px}
+html[data-theme="dark"] .cron-tabs .tab{background:#102138!important;color:#b8c8dc!important;border-color:#344b68!important}
+html[data-theme="dark"] .cron-tabs .tab.on{background:#28527f!important;color:#fff!important;border-color:#6f9bd2!important}
+html[data-theme="dark"] .status-pill{border:1px solid transparent!important;font-weight:900}
+html[data-theme="dark"] .status-pill.active{background:#153929!important;color:#8de0b8!important;border-color:#286044!important}
+html[data-theme="dark"] .status-pill.unavailable,html[data-theme="dark"] .status-pill.error{background:#3a1d29!important;color:#ff9da8!important;border-color:#743746!important}
+html[data-theme="dark"] .status-pill.expired{background:#3a2c16!important;color:#ffd17b!important;border-color:#74582a!important}
+html[data-theme="dark"] .quota-account{background:#0f1d30!important;border-color:#2b405c!important}
+html[data-theme="dark"] .quota-account :is(b,span,summary){color:#edf4ff}
+html[data-theme="dark"] .quota-account :is(small,p){color:#a9bad0}

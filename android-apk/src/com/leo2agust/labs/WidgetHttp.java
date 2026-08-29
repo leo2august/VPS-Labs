@@ -2,6 +2,7 @@ package com.leo2agust.labs;
 
 import android.content.Context;
 import android.app.PendingIntent;
+import android.app.AlarmManager;
 import android.appwidget.AppWidgetManager;
 import android.content.Intent;
 import android.webkit.CookieManager;
@@ -82,6 +83,15 @@ final class WidgetHttp {
         intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId);
         return PendingIntent.getBroadcast(context, request + widgetId, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    static void scheduleAutoRefresh(Context context) {
+        Intent intent = new Intent(context, WidgetRefreshReceiver.class);
+        PendingIntent pending = PendingIntent.getBroadcast(context, 2400, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        AlarmManager alarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (alarm != null) alarm.setInexactRepeating(AlarmManager.RTC,
+                System.currentTimeMillis() + 60000L, 60000L, pending);
     }
 
     static String updatedNow() {
