@@ -866,7 +866,7 @@ def api_lab_router_login_start():
 def api_lab_router_login_poll():
     b = request.get_json(force=True) or {}
     try:
-        return jsonify(lab_router_accounts.poll_device_login(b.get("flow_id")))
+        return jsonify(lab_router_accounts.poll_device_login(b.get("flow_id"), code=b.get("code")))
     except ValueError as exc:
         return jsonify(ok=False, error=str(exc)), 400
 

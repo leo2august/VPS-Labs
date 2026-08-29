@@ -435,11 +435,11 @@ def start_device_login(provider, account_id=""):
             return {"ok": False, "error": str(exc)}
 
 
-def poll_device_login(flow_id):
+def poll_device_login(flow_id, code=None):
     """Poll status login — independent OAuth engine, fallback ke 9router."""
     from lab_oauth import poll_device_login as _oauth_poll
     try:
-        return _oauth_poll(flow_id)
+        return _oauth_poll(flow_id, code=code)
     except ValueError as exc:
         try:
             _call("GET", "/api/providers", timeout=2)

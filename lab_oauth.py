@@ -333,25 +333,25 @@ FLOWS = {
     "kiro": (start_kiro_device, poll_kiro_token),
     "github": (start_github_device, poll_github_token),
     "kiro_social": (start_kiro_social, poll_kiro_social),
-    "kiro-google": (lambda a="": start_kiro_social("google"), lambda f, code=None: poll_kiro_social(f, code)),
-    "kiro-github": (lambda a="": start_kiro_social("github"), lambda f, code=None: poll_kiro_social(f, code)),
+    "kiro-google": (lambda a="": start_kiro_social("google"), lambda f, code=None: poll_kiro_social(f, code=code)),
+    "kiro-github": (lambda a="": start_kiro_social("github"), lambda f, code=None: poll_kiro_social(f, code=code)),
 }
 
 
 def start_device_login(provider, account_id=""):
-    """Mulai device login mandiri. provider: kiro | github | ..."""
+    """Mulai device login mandiri. provider: kiro | github | kiro-google | kiro-github | ..."""
     provider = (provider or "").lower()
     if provider not in FLOWS:
         raise ValueError(f"provider OAuth '{provider}' belum didukung di Labs (tersedia: {', '.join(FLOWS)})")
     return FLOWS[provider][0](account_id)
 
 
-def poll_device_login(flow_id):
-    """Poll status login per flow id."""
+def poll_device_login(flow_id, code=None):
+    """Poll status login per flow id. code diperlukan untuk social login (kiro-google/github)."""
     flow = _flows.get(flow_id)
     if not flow:
         raise ValueError("flow tidak ditemukan / sudah kedaluwarsa")
-    return FLOWS[flow["provider"]][1](flow_id)
+    return FLOWS[flow["provider"]][1](flow_id, code=code)
 
 
 if __name__ == "__main__":
