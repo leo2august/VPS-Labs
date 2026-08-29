@@ -266,6 +266,21 @@ def test_account(account_id):
         raw = _account_data(account_id)
         base = _base_url(raw)
         if not base:
+            # OAuth provider without public base URL; check token expiry + model list
+            if str(raw.get("provider", "")).lower() in OAUTH_PROVIDERS:
+                expires = raw.get("expiresAt") or ""
+                expired = False
+                if expires:
+                    try:
+                        from datetime import datetime, timezone
+                        expired = datetime.fromisoformat(str(expires).replace("Z", "+00:00")) < datetime.now(timezone.utc)
+                    except ValueError:
+                        pass
+                locked = sorted(k.replace("modelLock_", "", 1) for k, v in raw.items() if k.startswith("modelLock_") and v)
+                if expired:
+                    return {"ok": True, "result": {"valid": False, "error": f"token kedaluwarsa ({expires[:10]})"}}
+                msg = f"token OAuth valid" + (f" ({len(locked)} model)" if locked else "")
+                return {"ok": True, "result": {"valid": True, "note": msg, "models": locked}}
             return {"ok": True, "result": {"valid": False, "error": "base URL tidak diketahui untuk provider ini (mode offline)"}}
         token = _auth_token(raw)
         if not token:
