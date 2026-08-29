@@ -106,6 +106,7 @@ public class MainActivity extends Activity {
                 super.onPageFinished(view, url);
                 injectNavBridge();
                 updateNavForUrl(url);
+                injectBrand();
             }
         });
 
@@ -137,7 +138,12 @@ public class MainActivity extends Activity {
         bottomNav.setBackgroundColor(Color.parseColor("#17243d"));
         bottomNav.setPadding(dpToPx(2), dpToPx(2), dpToPx(2), dpToPx(2));
 
-        buildBottomNav();
+        String initBase = prefs.getString("labs_url", LABS_URL);
+        if (initBase == null || initBase.trim().isEmpty()) {
+            buildLoginNav();
+        } else {
+            buildBottomNav();
+        }
 
         root.addView(webView);
         root.addView(bottomNav);
@@ -328,18 +334,41 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == 100) {
-            buildBottomNav();
-            String baseUrl = prefs.getString("labs_url", LABS_URL);
-            if (baseUrl == null || baseUrl.trim().isEmpty()) {
+            String base = prefs.getString("labs_url", LABS_URL);
+            if (base == null || base.trim().isEmpty()) {
+                buildLoginNav();
                 showSetupPrompt();
-                return;
-            }
-            String cur = webView.getUrl();
-            if (cur == null || !cur.startsWith(baseUrl)) {
-                webView.loadUrl(baseUrl);
             } else {
-                webView.reload();
+                buildBottomNav();
+                // auto-detect brand dari URL
+                autoDetectBrand(base);
+                String cur = webView.getUrl();
+                if (cur == null || !cur.startsWith(base)) {
+                    webView.loadUrl(base);
+                } else {
+                    webView.reload();
+                }
             }
+        }
+    }
+
+    // Auto-detect brand dari URL: labs.xxx.domain → "xxx"
+    private void autoDetectBrand(String url) {
+        try {
+            String host = new java.net.URL(url).getHost();
+            String[] parts = host.split("\\.");
+            String brand = "";
+            if (parts.length >= 3 && parts[0].equals("labs")) {
+                brand = parts[1];
+            } else if (parts.length >= 2) {
+                brand = parts[0];
+            }
+            if (brand.isEmpty()) return;
+            // simpan ke lab-settings via API (butuh login) — skip dulu
+            // simpan ke prefs lokal untuk referensi
+            prefs.edit().putString("_detected_brand", brand).apply();
+        } catch (Exception e) {
+            // abaikan
         }
     }
 
@@ -373,6 +402,25 @@ public class MainActivity extends Activity {
             + "});obs.observe(nav,{attributes:true,childList:true,subtree:true,attributeFilter:['class']});"
             + "})()";
         webView.evaluateJavascript(js, null);
+    }
+
+    // Terapkan brand terdeteksi ke halaman web (sidebar, title, brand name)
+    private void injectBrand() {
+        final String brand = prefs.getString("brand_name", "");
+        if (brand == null || brand.isEmpty()) return;
+        String js = "javascript:(function(){"
+            + "var bn=" + jsonStr(brand) + ";"
+            + "var b=document.querySelector('.brand b');if(b)b.textContent=bn;"
+            + "var mb=document.querySelector('.mobile-brand');if(mb)mb.innerHTML='<span class=\"seal\">雲</span> '+bn;"
+            + "if(document.title.indexOf('·')>=0)document.title=bn+' · '+document.title.split('·')[1].trim();"
+            + "var saved={};try{saved=JSON.parse(localStorage.getItem('labs-settings')||'{}')}catch(e){}"
+            + "saved.brand_name=bn;localStorage.setItem('labs-settings',JSON.stringify(saved));"
+            + "})()";
+        webView.evaluateJavascript(js, null);
+    }
+
+    private static String jsonStr(String s) {
+        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\"";
     }
 
     @Override

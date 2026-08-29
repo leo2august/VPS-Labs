@@ -21,6 +21,7 @@ public class SettingsActivity extends Activity {
 
     private SharedPreferences prefs;
     private EditText urlInput;
+    private EditText brandInput;
     private CheckBox[] tabChecks = new CheckBox[MainActivity.NAV_ITEMS.length];
     private static final String[] TAB_KEYS = {"tab_overview","tab_performance","tab_services","tab_chat","tab_config"};
 
@@ -68,12 +69,42 @@ public class SettingsActivity extends Activity {
         urlInput.setBackground(rounded(Color.parseColor("#ffffff"), Color.parseColor("#d8d2c5")));
         root.addView(urlInput);
 
+        // Auto-detect brand dari URL: labs.xxx.domain → xxx
+        urlInput.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+                String t = s.toString().trim();
+                String detected = detectBrandFromUrl(t);
+                if (!detected.isEmpty()) {
+                    brandInput.setText(detected);
+                }
+            }
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+
         TextView urlHelp = new TextView(this);
         urlHelp.setText("Wajib diisi — alamat server Labs kamu sendiri. Jangan pakai URL orang lain.");
         urlHelp.setTextSize(11);
         urlHelp.setTextColor(Color.parseColor("#8896a8"));
         urlHelp.setPadding(0, dp(6), 0, dp(16));
         root.addView(urlHelp);
+
+        // Section: Nama Branding
+        root.addView(sectionLabel("NAMA BRANDING (OTOMATIS)"));
+        brandInput = new EditText(this);
+        brandInput.setText(prefs.getString("brand_name", ""));
+        brandInput.setTextSize(14);
+        brandInput.setSingleLine(true);
+        brandInput.setHint("leo2agust");
+        brandInput.setPadding(dp(12), dp(10), dp(12), dp(10));
+        brandInput.setBackground(rounded(Color.parseColor("#ffffff"), Color.parseColor("#d8d2c5")));
+        root.addView(brandInput);
+        TextView brandHelp = new TextView(this);
+        brandHelp.setText("Otomatis terisi dari URL (labs.NAMA.domain → NAMA). Bisa diedit manual.");
+        brandHelp.setTextSize(11);
+        brandHelp.setTextColor(Color.parseColor("#8896a8"));
+        brandHelp.setPadding(0, dp(6), 0, dp(16));
+        root.addView(brandHelp);
 
         // Section: Bottom nav
         root.addView(sectionLabel("NAVIGASI BAWAH (PILIH TAB)"));
@@ -151,14 +182,37 @@ public class SettingsActivity extends Activity {
             url = MainActivity.LABS_URL;
         }
         if (!url.startsWith("http")) url = "https://" + url;
+        String brand = brandInput.getText().toString().trim();
+        if (brand.isEmpty()) {
+            brand = detectBrandFromUrl(url);
+        }
         SharedPreferences.Editor e = prefs.edit();
         e.putString("labs_url", url);
+        if (!brand.isEmpty()) e.putString("brand_name", brand);
         for (int i = 0; i < tabChecks.length; i++) {
             e.putBoolean(TAB_KEYS[i], tabChecks[i].isChecked());
         }
         e.apply();
         setResult(RESULT_OK);
         finish();
+    }
+
+    // Deteksi brand dari URL: https://labs.NAMA.domain → NAMA; https://NAMA.domain → NAMA
+    private String detectBrandFromUrl(String url) {
+        try {
+            String u = url.trim();
+            if (!u.startsWith("http")) u = "https://" + u;
+            String host = new java.net.URL(u).getHost();
+            String[] parts = host.split("\\.");
+            if (parts.length >= 3 && parts[0].equals("labs")) {
+                return parts[1];
+            } else if (parts.length >= 2) {
+                return parts[0];
+            }
+        } catch (Exception e) {
+            // abaikan
+        }
+        return "";
     }
 
     private int dp(int v) {
