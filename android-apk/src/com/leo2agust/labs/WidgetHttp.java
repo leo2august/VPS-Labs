@@ -5,6 +5,9 @@ import android.app.PendingIntent;
 import android.app.AlarmManager;
 import android.appwidget.AppWidgetManager;
 import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
+import android.os.SystemClock;
 import android.webkit.CookieManager;
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -90,8 +93,21 @@ final class WidgetHttp {
         PendingIntent pending = PendingIntent.getBroadcast(context, 2400, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         AlarmManager alarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (alarm != null) alarm.setInexactRepeating(AlarmManager.RTC,
-                System.currentTimeMillis() + 60000L, 60000L, pending);
+        if (alarm == null) return;
+        long trigger = SystemClock.elapsedRealtime() + 60000L;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarm.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, trigger, pending);
+        } else {
+            alarm.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, trigger, pending);
+        }
+    }
+
+    static PendingIntent openPage(Context context, String page, int request) {
+        Intent intent = new Intent(context, MainActivity.class);
+        intent.putExtra("open_page", page);
+        intent.setData(Uri.parse("labs://open/" + page));
+        return PendingIntent.getActivity(context, request, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     static String updatedNow() {

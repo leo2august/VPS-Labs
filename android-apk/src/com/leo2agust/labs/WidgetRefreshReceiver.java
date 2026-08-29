@@ -1,21 +1,3 @@
 package com.leo2agust.labs;
-
-import android.appwidget.AppWidgetManager;
-import android.content.BroadcastReceiver;
-import android.content.ComponentName;
-import android.content.Context;
-import android.content.Intent;
-
-public class WidgetRefreshReceiver extends BroadcastReceiver {
-    @Override public void onReceive(Context context, Intent intent) {
-        AppWidgetManager manager = AppWidgetManager.getInstance(context);
-        int[] ids = manager.getAppWidgetIds(new ComponentName(context, LabsStatusWidget.class));
-        for (int id : ids) LabsStatusWidget.update(context, manager, id);
-        ids = manager.getAppWidgetIds(new ComponentName(context, LabsPerfWidget.class));
-        for (int id : ids) LabsPerfWidget.update(context, manager, id);
-        ids = manager.getAppWidgetIds(new ComponentName(context, LabsLogWidget.class));
-        for (int id : ids) LabsLogWidget.update(context, manager, id);
-        ids = manager.getAppWidgetIds(new ComponentName(context, LabsStorageWidget.class));
-        for (int id : ids) LabsStorageWidget.update(context, manager, id);
-    }
-}
+import android.appwidget.*;import android.content.*;
+public class WidgetRefreshReceiver extends BroadcastReceiver{@Override public void onReceive(Context c,Intent i){final PendingResult p=goAsync();final Context a=c.getApplicationContext();new Thread(new Runnable(){public void run(){try{AppWidgetManager m=AppWidgetManager.getInstance(a);int[] ids=m.getAppWidgetIds(new ComponentName(a,LabsStatusWidget.class));for(int id:ids)LabsStatusWidget.updateSync(a,m,id);ids=m.getAppWidgetIds(new ComponentName(a,LabsPerfWidget.class));for(int id:ids)LabsPerfWidget.updateSync(a,m,id);ids=m.getAppWidgetIds(new ComponentName(a,LabsLogWidget.class));for(int id:ids)LabsLogWidget.updateSync(a,m,id);ids=m.getAppWidgetIds(new ComponentName(a,LabsStorageWidget.class));for(int id:ids)LabsStorageWidget.updateSync(a,m,id);}finally{WidgetHttp.scheduleAutoRefresh(a);p.finish();}}}).start();}}

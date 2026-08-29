@@ -1,52 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/wp_root"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@drawable/widget_bg"
-    android:padding="16dp">
-
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical">
-        <TextView android:id="@+id/wp_title" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:text="Labs" android:textColor="#F6F1E7"
-            android:textSize="16sp" android:textStyle="bold" />
-        <TextView android:id="@+id/wp_refresh" android:layout_width="36dp" android:layout_height="36dp"
-            android:gravity="center" android:text="↻" android:contentDescription="Perbarui widget"
-            android:textColor="#53BCE6" android:textSize="22sp" />
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="PERFORMANCE" android:textColor="#DDBA55" android:textSize="9sp"
-            android:textStyle="bold" android:letterSpacing="0.12" />
+    android:id="@+id/wp_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@drawable/widget_bg" android:padding="16dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/wp_title" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Labs" android:textColor="#F6F1E7" android:textSize="16sp" android:textStyle="bold" />
+        <TextView android:id="@+id/wp_refresh" android:layout_width="36dp" android:layout_height="36dp" android:gravity="center" android:text="↻" android:contentDescription="Perbarui widget" android:textColor="#53BCE6" android:textSize="22sp" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="PERFORMANCE" android:textColor="#DDBA55" android:textSize="9sp" android:textStyle="bold" android:letterSpacing="0.12" />
     </LinearLayout>
-
-    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
-        android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
-        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:orientation="vertical" android:gravity="center">
-            <TextView android:id="@+id/wp_cpu" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="—" android:textColor="#53BCE6" android:textSize="25sp" android:textStyle="bold" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="CPU" android:textColor="#8494AA" android:textSize="9sp" android:letterSpacing="0.14" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center">
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:id="@+id/wp_cpu" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—" android:textColor="#53BCE6" android:textSize="25sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="CPU" android:textColor="#8494AA" android:textSize="9sp" android:letterSpacing="0.14" />
         </LinearLayout>
-        <View android:layout_width="1dp" android:layout_height="32dp" android:background="#263750" />
-        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:orientation="vertical" android:gravity="center">
-            <TextView android:id="@+id/wp_ram" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="—" android:textColor="#F6F1E7" android:textSize="25sp" android:textStyle="bold" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="RAM" android:textColor="#8494AA" android:textSize="9sp" android:letterSpacing="0.14" />
+        <TextView android:layout_width="1dp" android:layout_height="32dp" android:background="#263750" />
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:id="@+id/wp_ram" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—" android:textColor="#F6F1E7" android:textSize="25sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="RAM" android:textColor="#8494AA" android:textSize="9sp" android:letterSpacing="0.14" />
         </LinearLayout>
-        <View android:layout_width="1dp" android:layout_height="32dp" android:background="#263750" />
-        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
-            android:orientation="vertical" android:gravity="center">
-            <TextView android:id="@+id/wp_disk" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="—" android:textColor="#EA777B" android:textSize="25sp" android:textStyle="bold" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="DISK" android:textColor="#8494AA" android:textSize="9sp" android:letterSpacing="0.14" />
+        <TextView android:layout_width="1dp" android:layout_height="32dp" android:background="#263750" />
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+            <TextView android:id="@+id/wp_disk" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—" android:textColor="#EA777B" android:textSize="25sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DISK" android:textColor="#8494AA" android:textSize="9sp" android:letterSpacing="0.14" />
         </LinearLayout>
     </LinearLayout>
-
-    <TextView android:id="@+id/wp_meta" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:gravity="center" android:text="Menghubungkan server…" android:textColor="#8494AA" android:textSize="10sp" />
+    <TextView android:id="@+id/wp_meta" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:text="Menghubungkan server…" android:textColor="#8494AA" android:textSize="10sp" />
 </LinearLayout>

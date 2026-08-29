@@ -67,11 +67,13 @@ public class MainActivity extends Activity {
     private static final int REQ_STORAGE = 2001;
     private boolean isLoginNav = false; // track nav state untuk cegah kedip
     private long lastWidgetRefresh = 0;
+    private String pendingPage;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("labs_prefs", Context.MODE_PRIVATE);
+        pendingPage = getIntent().getStringExtra("open_page");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             getWindow().setStatusBarColor(Color.parseColor("#0f1a2c"));
             getWindow().setNavigationBarColor(Color.parseColor("#17243d"));
@@ -126,6 +128,11 @@ public class MainActivity extends Activity {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) CookieManager.getInstance().flush();
                     WidgetHttp.persistCookie(MainActivity.this);
                     refreshWidgets();
+                    if (pendingPage != null) {
+                        final String page = pendingPage;
+                        pendingPage = null;
+                        view.postDelayed(new Runnable() { public void run() { navigateTo(page); } }, 250);
+                    }
                 }
             }
         });
@@ -187,6 +194,15 @@ public class MainActivity extends Activity {
                 UpdateChecker.check(MainActivity.this, true, null);
             }
         }, 3000);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String page = intent.getStringExtra("open_page");
+        if (page != null && webView != null && webView.getUrl() != null && !webView.getUrl().contains("/login")) navigateTo(page);
+        else pendingPage = page;
     }
 
     // Layar pertama kali: URL belum di-set → arahkan ke Settings
