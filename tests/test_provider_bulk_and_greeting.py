@@ -27,7 +27,7 @@ class ProviderBulkAndGreetingTests(unittest.TestCase):
         with patch.object(accounts, "_call", side_effect=fake_call):
             result = accounts.update_provider_accounts("kiro", False)
 
-        self.assertEqual(result, {"ok": True, "provider": "kiro", "enabled": False, "updated": 2, "failed": []})
+        self.assertEqual(result, {"ok": True, "mode": "api", "provider": "kiro", "enabled": False, "updated": 2, "failed": []})
         self.assertEqual(calls, [
             ("PUT", "/api/providers/k1", {"isActive": False}),
             ("PUT", "/api/providers/k2", {"isActive": False}),

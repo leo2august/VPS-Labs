@@ -1,13 +1,17 @@
 """Safe localhost bridge for 9router provider/account management."""
 import json
+import os
+import sqlite3
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from pathlib import Path
 
 BASE = "http://127.0.0.1:20128"
+LIVE_DB = Path(os.environ.get("LABS_9ROUTER_DB", "/home/ubuntu/.9router/db/data.sqlite"))
 DEVICE_PROVIDERS = {"kiro", "github", "qwen"}
 API_KEY_PROVIDERS = {"openrouter", "glm", "minimax", "gemini", "deepseek", "openai"}
 _flows = {}
@@ -47,28 +51,69 @@ def router_status():
         return {"online": False, "connections": 0}
 
 
+def _db_set_active(account_ids, enabled):
+    """Write isActive directly into the 9router SQLite DB (offline mode)."""
+    if not LIVE_DB.exists():
+        raise ValueError("database 9router tidak ditemukan untuk mode offline")
+    ids = [_id(i) for i in account_ids]
+    con = sqlite3.connect(str(LIVE_DB))
+    try:
+        cur = con.cursor()
+        for aid in ids:
+            cur.execute("UPDATE providerConnections SET isActive=?, updatedAt=? WHERE id=?",
+                        (1 if enabled else 0, time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime()), aid))
+        con.commit()
+        updated = cur.rowcount if len(ids) == 1 else len(ids)
+    finally:
+        con.close()
+    return {"ok": True, "mode": "db", "updated": max(updated, 0)}
+
+
 def update_account(account_id, enabled):
-    data = _call("PUT", f"/api/providers/{_id(account_id)}", {"isActive": bool(enabled)})
-    return {"ok": True, "connection": data.get("connection", data)}
+    try:
+        data = _call("PUT", f"/api/providers/{_id(account_id)}", {"isActive": bool(enabled)})
+        return {"ok": True, "mode": "api", "connection": data.get("connection", data)}
+    except ValueError:
+        return _db_set_active([account_id], enabled)
 
 
 def update_provider_accounts(provider, enabled):
     provider = str(provider or "").strip()
-    rows = _call("GET", "/api/providers", timeout=5).get("connections", [])
-    matches = [row for row in rows if str(row.get("provider", "")).lower() == provider.lower()]
-    if not provider or not matches:
-        raise ValueError("provider tidak ditemukan")
-    failed = []
-    updated = 0
-    for row in matches:
-        account_id = _id(row.get("id"))
+    try:
+        rows = _call("GET", "/api/providers", timeout=5).get("connections", [])
+        matches = [row for row in rows if str(row.get("provider", "")).lower() == provider.lower()]
+        if not provider or not matches:
+            raise ValueError("provider tidak ditemukan")
+        failed = []
+        updated = 0
+        for row in matches:
+            account_id = _id(row.get("id"))
+            try:
+                _call("PUT", f"/api/providers/{account_id}", {"isActive": bool(enabled)})
+                updated += 1
+            except ValueError as exc:
+                failed.append({"id": account_id, "error": str(exc)})
+        return {"ok": not failed, "mode": "api", "provider": provider, "enabled": bool(enabled),
+                "updated": updated, "failed": failed}
+    except ValueError:
+        # offline: toggle straight on the DB
+        if not provider:
+            raise ValueError("provider tidak ditemukan")
+        if not LIVE_DB.exists():
+            raise ValueError("database 9router tidak ditemukan untuk mode offline")
+        con = sqlite3.connect(str(LIVE_DB))
         try:
-            _call("PUT", f"/api/providers/{account_id}", {"isActive": bool(enabled)})
-            updated += 1
-        except ValueError as exc:
-            failed.append({"id": account_id, "error": str(exc)})
-    return {"ok": not failed, "provider": provider, "enabled": bool(enabled),
-            "updated": updated, "failed": failed}
+            rows = con.execute("SELECT id FROM providerConnections WHERE lower(provider)=?",
+                               (provider.lower(),)).fetchall()
+        finally:
+            con.close()
+        if not rows:
+            raise ValueError("provider tidak ditemukan")
+        ids = [r[0] for r in rows]
+        result = _db_set_active(ids, enabled)
+        result["provider"] = provider
+        result["enabled"] = bool(enabled)
+        return result
 
 
 def test_account(account_id):

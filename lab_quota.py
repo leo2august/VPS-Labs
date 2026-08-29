@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 BACKUPS = Path(__file__).resolve().parent / "backups"
-LIVE_DB = Path(os.environ.get("LABS_9ROUTER_DB", "/home/USER/.9router/db/data.sqlite"))
+LIVE_DB = Path(os.environ.get("LABS_9ROUTER_DB", "/home/ubuntu/.9router/db/data.sqlite"))
 LIVE_API = "http://127.0.0.1:20128/api/providers"
 
 
@@ -52,15 +52,17 @@ def _account(row, used):
             "prompt_tokens": used["prompt"], "output_tokens": used["output"]}
 
 
-def _result(accounts, source, stamp, live):
+def _result(accounts, source, stamp, live, note=None, db_mode=False):
     counts = defaultdict(int)
     for account in accounts: counts[account["status"]] += 1
-    return {"ok": True, "live": live, "source": source, "snapshot_at": stamp, "accounts": accounts,
+    if note is None:
+        note = ("Data live 9router. Kontrol akun dan login tersedia." if live else
+                "9router offline. Data fallback dari backup; kontrol akun dinonaktifkan.")
+    return {"ok": True, "live": live, "db_mode": db_mode, "source": source, "snapshot_at": stamp, "accounts": accounts,
             "summary": {"total": len(accounts), "active": counts["active"],
                         "unavailable": counts["unavailable"] + counts["error"],
                         "expired": counts["expired"], "disabled": counts["disabled"]},
-            "note": ("Data live 9router. Kontrol akun dan login tersedia." if live else
-                     "9router offline. Data fallback dari backup; kontrol akun dinonaktifkan.")}
+            "note": note}
 
 
 def _live_status():
@@ -68,6 +70,33 @@ def _live_status():
         rows = json.loads(res.read()).get("connections", [])
     totals = _usage(LIVE_DB)
     return _result([_account(r, totals[str(r.get("id", ""))]) for r in rows], "9router LIVE", time.time(), True)
+
+
+def _db_read_accounts(db_path=LIVE_DB):
+    """Read provider accounts straight from the 9router SQLite DB."""
+    db = Path(db_path)
+    if not db.exists():
+        raise FileNotFoundError(str(db))
+    totals = _usage(db)
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    try:
+        rows = list(con.execute("SELECT id,provider,name,email,isActive,data FROM providerConnections ORDER BY provider,name"))
+    finally:
+        con.close()
+    accounts = []
+    for row in rows:
+        raw = dict(row)
+        raw.update(json.loads(raw.pop("data") or "{}"))
+        accounts.append(_account(raw, totals[str(raw.get("id", ""))]))
+    return accounts
+
+
+def _db_status():
+    accounts = _db_read_accounts()
+    return _result(accounts, "9router DB", time.time(), True,
+                   note="9router API mati; data langsung dari database. Toggle akun memakai mode DB (tanpa API).",
+                   db_mode=True)
 
 
 def _backup_status():
@@ -89,10 +118,16 @@ def _backup_status():
 
 
 def quota_status():
-    try: return _live_status()
+    try:
+        return _live_status()
     except Exception:
-        try: return _backup_status()
-        except Exception as exc: return {"ok": False, "error": str(exc)[:240], "accounts": []}
+        try:
+            return _db_status()
+        except Exception:
+            try:
+                return _backup_status()
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)[:240], "accounts": []}
 
 
 if __name__ == "__main__":
