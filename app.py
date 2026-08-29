@@ -332,7 +332,7 @@ def login():
         ip = request.remote_addr or "?"
         if _rate_limited(f"ip:{ip}", limit=15, window=900) or _rate_limited(f"user:{user}", limit=10, window=900):
             time.sleep(1.5)
-            return render_template("login.html", error="Terlalu banyak percobaan. Tunggu 15 menit.", brand_name=bn, brand_sub=bs), 429
+            return render_template("login.html", error="Terlalu banyak percobaan. Tunggu 15 menit.", brand_name=_lab_brand()[0], brand_sub=_lab_brand()[1]), 429
         valid = lab_account.valid_identifier(user) and hmac.compare_digest(password, os.environ.get("NUVULABS_PASSWORD", ""))
         if valid:
             _clear_rate(f"ip:{ip}"); _clear_rate(f"user:{user}")
@@ -340,19 +340,19 @@ def login():
             target = request.args.get("next", "/")
             return redirect(target if target.startswith("/") and not target.startswith("//") else "/")
         time.sleep(.35); error = "Username atau password salah."
-    return render_template("login.html", error=error, brand_name=bn, brand_sub=bs)
+    return render_template("login.html", error=error, brand_name=_lab_brand()[0], brand_sub=_lab_brand()[1])
 
 
 @app.post("/forgot-password")
 def forgot_password():
     ip = request.remote_addr or "?"
     if _rate_limited(f"fp:{ip}", limit=5, window=3600):
-        return render_template("login.html", notice="Terlalu banyak permintaan reset. Tunggu 1 jam.", brand_name=bn, brand_sub=bs), 429
+        return render_template("login.html", notice="Terlalu banyak permintaan reset. Tunggu 1 jam.", brand_name=_lab_brand()[0], brand_sub=_lab_brand()[1]), 429
     try:
         result = lab_account.request_reset(request.form.get("identifier", ""), request.url_root)
     except (OSError, ValueError, smtplib.SMTPException):
         result = {'ok': True, 'message': 'Jika akun dan email pemulihan aktif, tautan reset sudah dikirim.'}
-    return render_template("login.html", notice=result['message'], brand_name=bn, brand_sub=bs)
+    return render_template("login.html", notice=result['message'], brand_name=_lab_brand()[0], brand_sub=_lab_brand()[1])
 
 
 @app.route("/reset/<token>", methods=("GET", "POST"))
@@ -367,7 +367,7 @@ def reset_password(token):
             if result.get('ok'):
                 subprocess.Popen(['systemctl', 'daemon-reload'])
                 subprocess.Popen(['systemctl', 'restart', 'vps-audit.service'])
-                return render_template("login.html", notice="Password berubah. Masuk memakai password baru.", brand_name=bn, brand_sub=bs)
+                return render_template("login.html", notice="Password berubah. Masuk memakai password baru.", brand_name=_lab_brand()[0], brand_sub=_lab_brand()[1])
             error = result.get('error')
     return render_template("reset.html", token=token, error=error)
 

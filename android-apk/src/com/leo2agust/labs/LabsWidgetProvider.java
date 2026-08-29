@@ -46,7 +46,25 @@ public class LabsWidgetProvider extends AppWidgetProvider {
                 String result = "Offline";
                 int color = 0xFFdc2626;
                 try {
-                    URL u = new URL("https://labs.leo2agust.my.id/health");
+                    // baca URL dari prefs (bukan hardcode) — kalau kosong, jangan cek
+                    String base = context.getSharedPreferences("labs_prefs", Context.MODE_PRIVATE)
+                            .getString("labs_url", "");
+                    if (base == null || base.trim().isEmpty()) {
+                        result = "Belum diatur";
+                        color = 0xFFd97706;
+                        final String res0 = result;
+                        final int col0 = color;
+                        new Handler(Looper.getMainLooper()).post(new Runnable() {
+                            public void run() {
+                                RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_labs);
+                                views.setTextViewText(R.id.widget_status, res0);
+                                views.setInt(R.id.widget_dot, "setColorFilter", col0);
+                                manager.updateAppWidget(widgetId, views);
+                            }
+                        });
+                        return;
+                    }
+                    URL u = new URL(base + "/health");
                     HttpURLConnection c = (HttpURLConnection) u.openConnection();
                     c.setConnectTimeout(8000);
                     c.setReadTimeout(8000);

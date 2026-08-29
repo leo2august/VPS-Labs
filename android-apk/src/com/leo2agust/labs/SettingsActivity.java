@@ -51,7 +51,7 @@ public class SettingsActivity extends Activity {
         root.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Ubah URL server & navigasi bawah.\nDefault: labs.leo2agust.my.id (server Leo2agust).");
+        sub.setText("Ubah URL server & navigasi bawah.\nIsi alamat server Labs kamu sendiri.");
         sub.setTextSize(12);
         sub.setTextColor(Color.parseColor("#8896a8"));
         sub.setPadding(0, 0, 0, dp(18));
