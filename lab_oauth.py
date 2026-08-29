@@ -232,11 +232,109 @@ def poll_github_token(flow_id):
 
 
 # ---------------------------------------------------------------------------
+# Kiro social login (Google/GitHub via kiro.auth.desktop.kiro.dev)
+# No AWS client registration needed — kiro's own OAuth proxy.
+# ---------------------------------------------------------------------------
+KIRO_SOCIAL_BASE = "https://prod.us-east-1.auth.desktop.kiro.dev"
+KIRO_REDIRECT = "kiro://kiro.kiroAgent/authenticate-success"
+
+
+def kiro_build_social_url(provider, code_challenge, state):
+    """Build kiro social login URL (mirrors 9router's buildSocialLoginUrl)."""
+    idp = "Google" if provider == "google" else "Github"
+    import urllib.parse
+    return (f"{KIRO_SOCIAL_BASE}/login?idp={idp}"
+            f"&redirect_uri={urllib.parse.quote(KIRO_REDIRECT)}"
+            f"&code_challenge={code_challenge}&code_challenge_method=S256"
+            f"&state={state}&prompt=select_account")
+
+
+def kiro_exchange_social_code(code, code_verifier):
+    """Exchange kiro social auth code for tokens (mirrors exchangeSocialCode)."""
+    import urllib.parse
+    body = json.dumps({
+        "code": code,
+        "code_verifier": code_verifier,
+        "redirect_uri": KIRO_REDIRECT,
+    }).encode()
+    req = urllib.request.Request(
+        f"{KIRO_SOCIAL_BASE}/oauth/token", data=body,
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as res:
+            d = json.loads(res.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        raise ValueError(f"kiro token exchange gagal: {exc.read()[:200]}")
+    if "accessToken" not in d and "access_token" not in d:
+        raise ValueError(f"kiro exchange response tidak valid: {d}")
+    return {
+        "accessToken": d.get("accessToken") or d.get("access_token"),
+        "refreshToken": d.get("refreshToken") or d.get("refresh_token"),
+        "profileArn": d.get("profileArn") or d.get("profile_arn"),
+        "expiresIn": d.get("expiresIn") or d.get("expires_in") or 3600,
+    }
+
+
+def start_kiro_social(provider="google"):
+    """Mulai kiro social login — PKCE, return URL untuk dibuka di browser."""
+    import hashlib
+    import base64
+    code_verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode()
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).rstrip(b"=").decode()
+    state = base64.urlsafe_b64encode(os.urandom(16)).rstrip(b"=").decode()
+    auth_url = kiro_build_social_url(provider, code_challenge, state)
+    flow_id = uuid.uuid4().hex[:12]
+    _flows[flow_id] = {
+        "provider": "kiro_social",
+        "social_provider": provider,
+        "code_verifier": code_verifier,
+        "state": state,
+        "auth_url": auth_url,
+        "started_at": time.time(),
+    }
+    return {
+        "ok": True,
+        "flow_id": flow_id,
+        "auth_url": auth_url,
+        "state": state,
+        "provider": provider,
+        "note": "Buka URL ini, login via " + ("Google" if provider == "google" else "GitHub"),
+    }
+
+
+def poll_kiro_social(flow_id, code=None):
+    """Setelah user login, kiro redirect ke kiro:// dengan ?code=...  Masukkan code di sini."""
+    flow = _flows.get(flow_id)
+    if not flow:
+        raise ValueError("flow tidak ditemukan")
+    if not code:
+        return {"ok": False, "pending": True,
+                "message": "Setelah login, kiro akan redirect ke kiro:// dengan parameter code. Salin code-nya."}
+    tokens = kiro_exchange_social_code(code, flow["code_verifier"])
+    # store into a kiro account
+    account_id = flow.get("account_id") or ""
+    if account_id:
+        _store_oauth_tokens(account_id, tokens)
+    del _flows[flow_id]
+    return {"ok": True, "tokens": {
+        "accessToken": tokens["accessToken"][:12] + "...",
+        "refreshToken": tokens["refreshToken"][:12] + "...",
+        "profileArn": tokens["profileArn"],
+    }}
+
+
+# ---------------------------------------------------------------------------
 # Public dispatcher — same signature as existing 9router bridge
 # ---------------------------------------------------------------------------
 FLOWS = {
     "kiro": (start_kiro_device, poll_kiro_token),
     "github": (start_github_device, poll_github_token),
+    "kiro_social": (start_kiro_social, poll_kiro_social),
+    "kiro-google": (lambda a="": start_kiro_social("google"), lambda f, code=None: poll_kiro_social(f, code)),
+    "kiro-github": (lambda a="": start_kiro_social("github"), lambda f, code=None: poll_kiro_social(f, code)),
 }
 
 
