@@ -1,5 +1,6 @@
 """9router account health: live API first, newest backup as fallback."""
 import json
+import os
 import sqlite3
 import tempfile
 import time
