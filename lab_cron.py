@@ -235,10 +235,18 @@ def system_sources(max_age=60):
 
 
 def _run_cli(args, timeout=90):
-    """Jalankan perintah hermes cron CLI."""
+    """Jalankan perintah hermes cron CLI sebagai user ubuntu (bukan root).
+
+    Flask berjalan sebagai root; jika CLI dijalankan root, jobs.json akan
+    ditulis ulang jadi milik root dan scheduler (ubuntu) tidak bisa baca.
+    Paksa lewat sudo -u ubuntu dengan HOME=/home/ubuntu."""
     try:
-        env = dict(os.environ, HERMES_ACCEPT_HOOKS="1", XDG_RUNTIME_DIR="/run/user/1000")
-        r = subprocess.run(HERMES_CLI + args, capture_output=True, text=True, timeout=timeout, env=env)
+        run_as = ["sudo", "-u", "ubuntu"]
+        env = dict(os.environ,
+                   HERMES_ACCEPT_HOOKS="1",
+                   XDG_RUNTIME_DIR="/run/user/1000",
+                   HOME="/home/ubuntu")
+        r = subprocess.run(run_as + HERMES_CLI + args, capture_output=True, text=True, timeout=timeout, env=env)
         out = (r.stdout or "").strip()
         err = (r.stderr or "").strip()
         return {"ok": r.returncode == 0, "code": r.returncode, "stdout": out[-400:], "stderr": err[-400:]}
@@ -249,13 +257,16 @@ def _run_cli(args, timeout=90):
 
 
 def action(job_id, act):
-    """pause | resume | run untuk satu job via hermes cron CLI."""
+    """pause | resume | run | remove untuk satu job via hermes cron CLI."""
     cmd_map = {"pause": "pause", "resume": "resume", "run": "run", "remove": "remove"}
     if act not in cmd_map:
         return {"ok": False, "error": f"Aksi '{act}' tidak dikenal"}
     r = _run_cli(["cron", cmd_map[act], job_id])
-    if not r["ok"]:
-        return {"ok": False, "error": r["stderr"] or r["stdout"] or "gagal"}
+    # CLI returns 0 even on failure; detect failure from stdout message
+    out = (r.get("stdout") or "") + " " + (r.get("stderr") or "")
+    failed = ("not found" in out.lower()) or ("failed to" in out.lower()) or ("gagal" in out.lower())
+    if not r["ok"] or failed:
+        return {"ok": False, "error": (out.strip() or "gagal")[:200]}
     return {"ok": True, "action": act, "detail": r["stdout"][:200]}
 
 
