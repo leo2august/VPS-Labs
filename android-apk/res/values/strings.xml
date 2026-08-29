@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="widget_desc">Pantau status server Labs langsung dari layar utama.</string>
+    <string name="widget_perf_desc">CPU, RAM, dan pemakaian disk dalam satu widget.</string>
+    <string name="widget_log_desc">Layanan terbaru dari server Labs.</string>
 </resources>
