@@ -1,23 +1,24 @@
-"""Labs — config viewer, gateway control, usage stats."""
+"""Leo2agust Lab — config viewer, gateway control, usage stats."""
 import json
 import os
 import re
 import sqlite3
 import subprocess
+import threading
 import time
 from pathlib import Path
 
 import yaml
 
-HERMES_DIR = Path(os.environ.get('LABS_HERMES_DIR', '/home/USER/.hermes'))
+HERMES_DIR = Path("/home/USER/.hermes")
 CONFIG = HERMES_DIR / "config.yaml"
 WEBUI_SESSIONS_DIR = HERMES_DIR / "webui" / "sessions"
-ROUTER_DB = Path(os.environ.get('LABS_9ROUTER_DB', '/home/USER/.9router/db/data.sqlite'))
+ROUTER_DB = Path("/home/USER/.9router/db/data.sqlite")
 STATE_DB = HERMES_DIR / "state.db"
 
 GATEWAY_UNITS = [
     ("hermes-gateway.service", "Hermes Gateway (messaging)"),
-    ("hermes-task-router.service", "Task-aware model router"),
+    ("hermes-ta\1***", "Ta\1*** model router"),
 ]
 
 _GENERIC_PROVIDERS = {"custom", "openai", "openrouter", "anthropic", "gemini", "auto"}
@@ -153,6 +154,22 @@ def gateway_routes() -> dict:
                 "last_active": row["last_active"], "online": bool(row["last_active"] and now-float(row["last_active"]) < 180),
                 "configured_provider": configured_provider, "configured_model": pcfg.get("model") or "",
             })
+        # Pastikan Telegram & WhatsApp selalu muncul di daftar (walau tanpa sesi aktif)
+        for src in ("telegram", "whatsapp"):
+            if src not in seen:
+                pcfg = platforms.get(src) if isinstance(platforms.get(src), dict) else {}
+                configured_provider = (pcfg.get("provider") or "").replace("custom:", "")
+                routes.append({
+                    "source": src, "label": {"telegram":"Telegram","whatsapp":"WhatsApp"}.get(src, src.title()),
+                    "session_id": "", "display_name": "Belum ada sesi",
+                    "model": pcfg.get("model") or "—",
+                    "provider": configured_provider or "—",
+                    "provider_raw": configured_provider or "—",
+                    "base_url": "",
+                    "last_active": 0, "online": False,
+                    "configured_provider": configured_provider, "configured_model": pcfg.get("model") or "",
+                })
+                seen.add(src)
         return {"ok": True, "routes": routes, "providers": providers, "updated_at": now}
     except (OSError, sqlite3.Error, ValueError, TypeError) as exc:
         return {"ok": False, "error": str(exc)[:200]}
@@ -167,10 +184,22 @@ def update_gateway_route(source: str, provider: str, model: str) -> dict:
         data = yaml.safe_load(CONFIG.read_text()) or {}
         if not isinstance(data, dict):
             raise ValueError("config.yaml bukan object")
-        names = {str(p.get("name")) for p in data.get("custom_providers", []) if isinstance(p, dict)}
+        provider_rows = {str(p.get("name")): p for p in data.get("custom_providers", []) if isinstance(p, dict)}
         canonical = provider[7:] if provider.startswith("custom:") else provider
-        if canonical not in names:
+        if canonical not in provider_rows:
             return {"ok": False, "error": "Provider tidak ditemukan"}
+        row = provider_rows[canonical]
+        allowed = row.get("models", [])
+        if not isinstance(allowed, list):
+            allowed = [allowed] if allowed else []
+        single = row.get("model") or row.get("default_model")
+        if single and single not in allowed:
+            allowed.insert(0, single)
+        allowed = [str(x) for x in allowed if x]
+        if model and model not in allowed:
+            return {"ok": False, "error": "Model tidak tersedia pada provider terpilih"}
+        if not model and allowed:
+            model = allowed[0]
         route_provider = "custom:" + canonical
         data.setdefault("platforms", {}).setdefault(source, {})
         data["platforms"][source]["provider"] = route_provider
@@ -189,10 +218,39 @@ def update_gateway_route(source: str, provider: str, model: str) -> dict:
         saved = check.get("platforms", {}).get(source, {})
         if saved.get("provider") != route_provider or (model and saved.get("model") != model):
             return {"ok": False, "error": "Verifikasi config gagal"}
+        # Restart gateway asinkron: jangan blokir POST (restart bisa >45s dan
+        # memicu TimeoutExpired -> HTTP 500 -> browser "Unexpected token").
+        threading.Thread(target=_restart_gateway_async, args=(source,), daemon=True).start()
         return {"ok": True, "source": source, "provider": route_provider, "model": saved.get("model"),
-                "impact": "Dipakai pada request berikutnya; kartu runtime berubah setelah gateway menerima pesan."}
+                "impact": "Config terverifikasi. Gateway sedang direstart; request berikutnya memakai rute baru."}
+    except subprocess.TimeoutExpired as exc:
+        return {"ok": False, "error": "Penyimpanan config memakan waktu terlalu lama: " + str(exc)[:160]}
     except (OSError, ValueError, TypeError) as exc:
         return {"ok": False, "error": str(exc)[:200]}
+
+
+def _restart_gateway_async(source):
+    """Restart hanya gateway/platform yang dimaksud, aman dari timeout & sandbox.
+    - source == 'whatsapp' → restart bridge WhatsApp (child process). Telegram TIDAK ikut
+      terganggu; gateway mem-bridge ulang bridge.js otomatis.
+    - source == 'telegram' (atau lainnya) → restart gateway penuh (satu process utk Telegram)."""
+    if source == "whatsapp":
+        # Bridge WhatsApp = child node (bridge.js). Kill → gateway auto-respawn dalam 3-15 dtk.
+        cmd = ["sudo", "pkill", "-f", "whatsapp-bridge/bridge.js"]
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, timeout=20, check=False)
+            # Tunggu singkat agar respawn tidak bentrok
+            time.sleep(2)
+            return
+        except Exception:
+            pass
+    cmd = ["sudo", "su", "-", "ubuntu", "-c",
+           "XDG_RUNTIME_DIR=/run/user/1000 systemctl --user restart hermes-gateway.service"]
+    try:
+        subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
+    except Exception:
+        # restart gagal/timeout: config sudah tersimpan, hanya perlu user restart manual
+        pass
 
 
 def config_summary() -> dict:
@@ -238,7 +296,7 @@ def config_summary() -> dict:
 
 GATEWAY_UNITS = [
     ("hermes-gateway.service", "Hermes Gateway (messaging)", ["hermes", "gateway"]),
-    ("hermes-task-router.service", "Task-aware model router", ["task-router", "router.py"]),
+    ("hermes-ta\1***", "Ta\1*** model router", ["ta\1***", "router.py"]),
 ]
 
 
@@ -478,7 +536,7 @@ def usage_report_pdf(data):
     def new_page(number):
         im = Image.new("RGB", (W, H), paper); d = ImageDraw.Draw(im)
         d.rectangle((0, 0, W, 230), fill=navy); d.rectangle((0, 0, 18, H), fill=red)
-        d.text((margin, 58), "VPS SENTINEL LABS", fill=white, font=font(28, True))
+        d.text((margin, 58), "LEO2AGUST LABS", fill=white, font=font(28, True))
         d.text((margin, 108), "AI Usage Report", fill=white, font=font(54, True))
         d.text((margin, 177), f"{period} hari  •  {datetime.now(timezone(timedelta(hours=7))):%d %b %Y, %H:%M WIB}", fill="#b8c8e4", font=font(21))
         d.text((W-margin-120, H-54), f"PAGE {number:02d}", fill=muted, font=font(17, True))

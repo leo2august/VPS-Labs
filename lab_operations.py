@@ -6,11 +6,12 @@ import time
 import uuid
 from pathlib import Path
 
-STATE_DB = Path(os.environ.get("LABS_HERMES_DIR", "/home/USER/.hermes")) / "state.db"
+STATE_DB = Path("/home/USER/.hermes/state.db")
 LAB_SETTINGS = Path(__file__).resolve().parent / "data" / "lab-settings.json"
 LAB_OPTIONS = {
     "theme": {"label": "Tema Labs", "description": "Warna seluruh dashboard Labs.", "choices": [["system", "Ikuti perangkat"], ["light", "Terang lembut"], ["dark", "Gelap nyaman"]], "default": "system"},
     "language": {"label": "Bahasa Labs", "description": "Bahasa label dan bantuan antarmuka Labs.", "choices": [["id", "Indonesia"], ["en", "English"]], "default": "id"},
+    "visual_theme": {"label": "Nuansa Jepang", "description": "Palet visual Labs tanpa mengubah mode terang atau gelap.", "choices": [["seigaiha", "Seigaiha Biru"], ["sakura", "Sakura Senja"], ["matcha", "Matcha Mori"], ["indigo", "Aizome Indigo"], ["sumi", "Sumi Kintsugi"]], "default": "seigaiha"},
     "density": {"label": "Kepadatan tampilan", "description": "Jarak kartu dan isi dashboard.", "choices": [["comfortable", "Nyaman"], ["compact", "Ringkas"]], "default": "comfortable"},
     "motion": {"label": "Animasi", "description": "Gerakan halus pada kartu dan panel.", "choices": [["full", "Normal"], ["reduced", "Dikurangi"]], "default": "full"},
     "session_order": {"label": "Urutan sesi", "description": "Urutan awal arsip percakapan.", "choices": [["recent", "Terbaru dulu"], ["oldest", "Terlama dulu"]], "default": "recent"},

@@ -22,13 +22,16 @@ import lab_router_accounts
 import lab_failover
 import lab_account
 import lab_cron
+import lab_update
+import lab_malware
+import lab_restart
 
 ROOT = Path(__file__).resolve().parent
 REPORT = ROOT / "latest-report.txt"
 SCRIPT = ROOT / "vps-audit.sh"
 app = Flask(__name__)
-app.secret_key = os.environ.get("LABS_SECRET", "")
-app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=os.environ.get("LABS_SECURE_COOKIE") == "1", PERMANENT_SESSION_LIFETIME=43200, MAX_CONTENT_LENGTH=200 * 1024 * 1024)
+app.secret_key = os.environ.get("NUVULABS_SECRET", "")
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=os.environ.get("NUVULABS_SECURE_COOKIE") == "1", PERMANENT_SESSION_LIFETIME=43200, MAX_CONTENT_LENGTH=200 * 1024 * 1024)
 
 # ---- CSRF defense (defense-in-depth on top of SameSite=Lax) ----
 _CSRF_SAFE_PATHS = ("/login", "/forgot-password", "/logout", "/reset/", "/health")
@@ -62,7 +65,7 @@ def _security_headers(resp):
     resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     if resp.headers.get("Server", "").startswith("Werkzeug"):
-        resp.headers["Server"] = "VPS Sentinel Labs"
+        resp.headers["Server"] = "Leo2agust"
     return resp
 
 # ---- Login brute-force guard (in-memory, per IP + per username) ----
@@ -94,8 +97,8 @@ except (psutil.Error, AttributeError):
     pass
 last_io = {"at": time.time(), "read": getattr(_boot_io, "read_bytes", 0) if _boot_io else 0, "write": getattr(_boot_io, "write_bytes", 0) if _boot_io else 0}
 last_audit = {"running": False, "at": 0, "checks": [], "summary": {"pass": 0, "warn": 0, "fail": 0}}
-SERVICES = ("hermes-webui", "hermes-dashboard", "hermes-gateway", "hermes-task-router", "vps-audit", "caddy", "fail2ban", "9router", "model-router")
-USER_SERVICES = {"hermes-gateway", "hermes-task-router"}
+SERVICES = ("hermes-webui", "hermes-dashboard", "hermes-gateway", "hermes-ta\1***", "vps-audit", "caddy", "fail2ban", "9router", "model-router")
+USER_SERVICES = {"hermes-gateway", "hermes-ta\1***"}
 
 
 def sh(*args, timeout=4):
@@ -122,7 +125,7 @@ def clamp(value):
 
 USER_SERVICE_PGREP = {
     "hermes-gateway": ["hermes_cli", "main"],
-    "hermes-task-router": ["task-router", "router.py"],
+    "hermes-ta\1***": ["ta\1***", "router.py"],
 }
 
 
@@ -225,10 +228,10 @@ PORT_CATALOG = {
     5031: ("Kasir POS", "Backend Kasir POS", "pos"),
     8099: ("Hermes WebUI API", "Backend WebUI internal", "hermes-webui"),
     8787: ("Hermes WebUI", "Panel Hermes internal", "hermes-webui"),
-    9118: ("VPS Sentinel Labs", "Dashboard ini", None),
+    9118: ("Leo2agust Labs", "Dashboard ini", None),
     9119: ("Hermes Dashboard", "Dashboard Hermes internal", "hermes-dashboard"),
     20128: ("9router", "Router model AI", "9router"),
-    20129: ("Task Router", "Routing model berbasis tugas", "hermes-task-router"),
+    20129: ("Task Router", "Routing model berbasis tugas", "hermes-ta\1***"),
 }
 
 
@@ -319,7 +322,7 @@ def login():
         if _rate_limited(f"ip:{ip}", limit=15, window=900) or _rate_limited(f"user:{user}", limit=10, window=900):
             time.sleep(1.5)
             return render_template("login.html", error="Terlalu banyak percobaan. Tunggu 15 menit."), 429
-        valid = lab_account.valid_identifier(user) and hmac.compare_digest(password, os.environ.get("LABS_PASSWORD", ""))
+        valid = lab_account.valid_identifier(user) and hmac.compare_digest(password, os.environ.get("NUVULABS_PASSWORD", ""))
         if valid:
             _clear_rate(f"ip:{ip}"); _clear_rate(f"user:{user}")
             session.clear(); session.permanent = True; session["authenticated"] = True; session["user"] = user
@@ -431,7 +434,7 @@ def system_info():
 
 
 def _cache_stats():
-    roots = (Path(os.environ.get("LABS_CACHE_DIR", "/home/USER/.cache")), Path("/var/cache/apt/archives"))
+    roots = (Path("/home/USER/.cache"), Path("/var/cache/apt/archives"))
     total = files = 0
     for root in roots:
         if not root.exists():
@@ -467,7 +470,7 @@ def storage_cleanup():
             return jsonify(ok=False, error=str(exc)), 500
     elif action == "cache":
         # Cache only: never touch app data, config, logs, or running processes.
-        roots = (Path(os.environ.get("LABS_CACHE_DIR", "/home/USER/.cache")), Path("/var/cache/apt/archives"))
+        roots = (Path("/home/USER/.cache"), Path("/var/cache/apt/archives"))
         for root in roots:
             if not root.exists():
                 continue
@@ -490,6 +493,45 @@ def audit():
     if not last_audit["running"]: threading.Thread(target=run_audit, daemon=True).start()
     return jsonify(ok=True, running=True), 202
 
+
+@app.post("/api/lab/malware-scan")
+@login_required
+def api_malware_scan_start():
+    body = request.get_json(silent=True) or {}
+    return jsonify(lab_malware.start(body.get("full") is True))
+
+
+@app.get("/api/lab/malware-scan")
+@login_required
+def api_malware_scan_status():
+    return jsonify(lab_malware.status(str(request.args.get("job_id", ""))))
+
+
+@app.get("/api/lab/malware-report")
+@login_required
+def api_malware_report():
+    return jsonify(lab_malware.latest_report())
+
+
+@app.get("/api/lab/malware-report/download")
+@login_required
+def api_malware_report_download():
+    report = lab_malware.latest_report()
+    if not report.get("ok"):
+        return jsonify(report), 404
+    payload = json.dumps(report, ensure_ascii=False, indent=2).encode()
+    return send_file(io.BytesIO(payload), mimetype="application/json", as_attachment=True,
+                     download_name=f"malware-report-{report.get('id', 'latest')}.json")
+
+
+@app.post("/api/lab/malware-report/agent")
+@login_required
+def api_malware_report_agent():
+    report = lab_malware.latest_report()
+    if not report.get("ok"):
+        return jsonify(report), 404
+    job_id = lab_features.start_agent_job(lab_malware.agent_prompt(report))
+    return jsonify(ok=bool(job_id), job_id=job_id)
 
 
 @app.get("/api/router")
@@ -563,6 +605,25 @@ def api_lab_session():
     sid = request.args.get("id", "")
     return jsonify(lab_operations.get_session(sid))
 
+
+@app.get("/api/lab/chat/history")
+@login_required
+def api_lab_chat_history():
+    """Riwayat chat Labs dari server (session_id) — persist walau localStorage hilang."""
+    sid = str(request.args.get("session_id", "")).strip()
+    if not sid or not sid.startswith("labs_"):
+        return jsonify(ok=True, messages=[])
+    try:
+        con = sqlite3.connect("/home/USER/.hermes/state.db", timeout=5)
+        con.row_factory = sqlite3.Row
+        msgs = con.execute(
+            "SELECT role, content, timestamp FROM messages WHERE session_id=? ORDER BY timestamp, id",
+            (sid,)).fetchall()
+        con.close()
+        return jsonify(ok=True, messages=[dict(m) for m in msgs])
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)[:200], messages=[])
+
 @app.post("/api/lab/chat")
 @login_required
 def api_lab_chat():
@@ -588,7 +649,9 @@ def api_lab_agent():
         return jsonify(ok=False, error="Prompt kosong"), 400
     model = str(body.get("model", ""))
     provider = str(body.get("provider", ""))
-    job_id = lab_features.start_agent_job(prompt, model, provider)
+    history = body.get("history") or []
+    session_id = str(body.get("session_id", ""))
+    job_id = lab_features.start_agent_job(prompt, model, provider, history, session_id)
     if not job_id:
         return jsonify(ok=False, error="Gagal membuat job"), 500
     return jsonify(ok=True, job_id=job_id)
@@ -599,8 +662,9 @@ def api_lab_agent():
 def api_lab_agent_status():
     job_id = str(request.args.get("job_id", ""))
     st = lab_features.agent_job_status(job_id)
-    if st.get("status") == "done" and st.get("ok"):
-        lab_operations.record_lab_exchange("", st.get("prompt", ""), st.get("reply", ""), "agent")
+    if st.get("status") == "done" and st.get("ok") and not st.get("recorded"):
+        lab_operations.record_lab_exchange(str(st.get("session_id") or ""), st.get("prompt", ""), st.get("reply", ""), "agent")
+        lab_features.mark_agent_job_recorded(job_id)
     return jsonify(st)
 
 
@@ -610,6 +674,21 @@ def api_lab_agent_cancel():
     body = request.get_json(force=True) or {}
     job_id = str(body.get("job_id", ""))
     return jsonify(ok=lab_features.cancel_agent_job(job_id))
+
+
+@app.get("/api/lab/attachments")
+@login_required
+def api_lab_attachments():
+    return jsonify(ok=True, attachments=lab_features.list_attachments())
+
+
+@app.get("/api/lab/attachments/<path:attachment_id>")
+@login_required
+def api_lab_attachment_download(attachment_id):
+    p = lab_features.attachment_path(attachment_id)
+    if not p:
+        return jsonify(ok=False, error="Attachment tidak ditemukan"), 404
+    return send_file(p, as_attachment=True, download_name=p.name)
 
 
 @app.get("/api/lab/activity")
@@ -796,7 +875,7 @@ def api_lab_usage_pdf():
     except ValueError: period = 30
     data = lab_admin.usage_stats(period)
     return send_file(io.BytesIO(lab_admin.usage_report_pdf(data)), mimetype="application/pdf",
-                     as_attachment=True, download_name=f"vps-sentinel-labs-usage-{data['period_days']}d.pdf")
+                     as_attachment=True, download_name=f"leo2agust-labs-usage-{data['period_days']}d.pdf")
 
 
 @app.get("/api/lab/models")
@@ -1028,6 +1107,15 @@ def api_lab_alerts():
                    unread=log["unread"], total=log["total"])
 
 
+@app.get("/api/lab/restart")
+@login_required
+def api_lab_restart():
+    rec = lab_restart.current()
+    if not rec:
+        return jsonify(ok=False, recorded=False)
+    return jsonify(ok=True, recorded=True, **rec)
+
+
 @app.route("/api/lab/notifications", methods=("GET", "POST"))
 @login_required
 def api_lab_notifications():
@@ -1067,6 +1155,38 @@ def api_service_action():
     return jsonify(lab_integration.service_action(name, action))
 
 
+@app.get("/api/lab/update/status")
+@login_required
+def api_lab_update_status():
+    return jsonify(lab_update.status())
+
+
+@app.get("/api/lab/update/preflight/<target>")
+@login_required
+def api_lab_update_preflight(target):
+    result = lab_update.preflight(target)
+    return jsonify(result), (200 if result.get("ok") else 400)
+
+
+@app.get("/api/lab/update/jobs")
+@login_required
+def api_lab_update_jobs():
+    return jsonify(lab_update.job_status())
+
+
+@app.get("/api/lab/update/jobs/<job_id>")
+@login_required
+def api_lab_update_job(job_id):
+    return jsonify(lab_update.job_status(job_id))
+
+
+@app.post("/api/lab/update/<target>")
+@login_required
+def api_lab_update_start(target):
+    body = request.get_json(silent=True) or {}
+    return jsonify(lab_update.start_update(target, body.get("confirmed") is True))
+
+
 @app.get("/health")
 def health(): return jsonify(ok=True)
 
@@ -1076,7 +1196,11 @@ if REPORT.exists():
     last_audit.update(at=int(REPORT.stat().st_mtime), checks=checks, summary=summary)
 
 if __name__ == "__main__":
-    if not app.secret_key: raise RuntimeError("LABS_SECRET is required")
+    if not app.secret_key: raise RuntimeError("NUVULABS_SECRET is required")
+    try:
+        lab_restart.record_restart()
+    except Exception:
+        pass
     if not last_audit["checks"]: threading.Thread(target=run_audit, daemon=True).start()
     threading.Thread(target=lab_failover.scheduler_loop, kwargs={"interval": 300}, daemon=True).start()
     app.run(host="127.0.0.1", port=9118)

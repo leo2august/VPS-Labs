@@ -31,3 +31,17 @@ before-*.png
 Thumbs.db
 .vscode/
 .idea/
+
+# Data, backups, build artifacts
+data/
+backups/
+*.bak
+*.bak-*
+*.tmp
+out/
+*.apk
+*.keystore
+*.zip
+qa-*.png
+before-redesign.png
+latest-report.txt

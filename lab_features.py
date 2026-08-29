@@ -1,17 +1,18 @@
-"""VPS Sentinel Labs — WebUI-feature integration: chat, skills, memory, sessions.
+"""Leo2agust Lab — WebUI-feature integration: chat, skills, memory, sessions.
 Reads local Hermes data + proxies chat via 9router. All read+local actions.
 """
 import json
 import os
 import re
 import subprocess
+import shutil
 import time
 from pathlib import Path
 
 import urllib.error
 import urllib.request
 
-HERMES_DIR = Path(os.environ.get("LABS_HERMES_DIR", "/home/USER/.hermes"))
+HERMES_DIR = Path("/home/USER/.hermes")
 CONFIG = HERMES_DIR / "config.yaml"
 SKILLS_DIR = HERMES_DIR / "skills"
 MEMORIES_DIR = HERMES_DIR / "memories"
@@ -322,11 +323,14 @@ def chat(messages: list, model: str = "", provider: str = "", max_tokens: int = 
     dipakai sesuai base_url + api_key yang terdaftar di config.yaml.
     System prompt dari SOUL.md (persona) disuntikkan ke awal riwayat.
     """
-    # resolve endpoint
-    ep = _resolve_endpoint(model) if model else None
-    if not ep:
-        # coba resolve by provider name
-        ep = _resolve_provider_by_name(provider, model)
+    # Model virtual GateKey punya resolver khusus. Selain itu provider dropdown
+    # bersifat otoritatif karena model sama bisa ada pada beberapa relay.
+    if str(model).startswith("gatekey-unlimited-"):
+        ep = _resolve_endpoint(model)
+    else:
+        ep = _resolve_provider_by_name(provider, model) if provider else None
+        if not ep:
+            ep = _resolve_endpoint(model) if model else None
     if not ep:
         return {"ok": False, "error": f"Model '{model}' tidak ditemukan di config. Pilih model dari dropdown."}
     base_url, api_key, request_model, extra_headers = ep
@@ -342,12 +346,22 @@ def chat(messages: list, model: str = "", provider: str = "", max_tokens: int = 
 
     body = json.dumps({"model": request_model, "messages": msgs,
                         "max_tokens": max_tokens, "stream": False}).encode()
-    headers = {"Content-Type": "application/json", "Authorization": "Bearer " + api_key}
+    headers = {"Content-Type": "application/json", "Authorization": "Bearer " + api_key,
+               # Beberapa relay Vercel memblokir User-Agent urllib default (403).
+               # UA openai-python SDK biar sama seperti gateway (telegram/WebUI) yang lancar.
+               "User-Agent": "OpenAI/Python 1.30.0"}
     if isinstance(extra_headers, dict):
         for k, v in extra_headers.items():
             if k.lower() not in ("content-type", "authorization"):
                 headers[str(k)] = str(v)
-    req = urllib.request.Request(base_url, data=body, headers=headers)
+    # Normalisasi URL: endpoint inference wajib berakhiran /chat/completions.
+    # base_url di config bisa berupa root relay (https://relay-...vercel.app),
+    # base /v1 (https://api.x.com/v1), atau path lengkap — kalau tidak di-normalisasi,
+    # request nyasar ke path non-inference → HTTP 403 "node only allows inference API paths".
+    url = str(base_url or "").strip().rstrip("/")
+    if not url.endswith("/chat/completions"):
+        url += "/chat/completions"
+    req = urllib.request.Request(url, data=body, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=240) as r:
             raw = r.read().decode("utf-8", "replace")
@@ -381,12 +395,33 @@ def _resolve_provider_by_name(provider, model):
     return None
 
 
-HERMES_PY = os.environ.get("LABS_HERMES_PY", "/home/USER/.hermes/hermes-agent/venv/bin/python")
+HERMES_PY = "/home/USER/.hermes/hermes-agent/venv/bin/python"
 
 # ---- Agent job manager (async) ----
 import threading
 AGENT_JOBS = {}
 _AGENT_LOCK = threading.Lock()
+AGENT_JOB_DIR = Path("/home/USER/labs/data/agent-jobs")
+ATTACHMENT_DIR = Path("/home/USER/labs/data/attachments")
+
+
+def _persist_agent_job(job_id):
+    """Simpan state tanpa objek process agar polling tetap hidup setelah restart Labs."""
+    job = AGENT_JOBS.get(job_id)
+    if not job:
+        return
+    safe = {k: v for k, v in job.items() if k != "proc"}
+    AGENT_JOB_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = AGENT_JOB_DIR / f".{job_id}.tmp"
+    tmp.write_text(json.dumps(safe, ensure_ascii=False))
+    tmp.replace(AGENT_JOB_DIR / f"{job_id}.json")
+
+
+def _load_agent_job(job_id):
+    try:
+        return json.loads((AGENT_JOB_DIR / f"{job_id}.json").read_text())
+    except (OSError, ValueError):
+        return None
 
 
 def _new_job_id():
@@ -397,22 +432,49 @@ def _agent_env():
     return dict(os.environ,
                 HERMES_ACCEPT_HOOKS="1", XDG_RUNTIME_DIR="/run/user/1000",
                 HERMES_SAFE_MODE="0", TERM="dumb",
-                HOME=os.environ.get("LABS_HERMES_HOME", "/home/USER"),
-                HERMES_HOME=os.environ.get("LABS_HERMES_DIR", "/home/USER/.hermes"),
-                USER=os.environ.get("LABS_SYSTEM_USER", "USER"),
-                LOGNAME=os.environ.get("LABS_SYSTEM_USER", "USER"))
+                HOME="/home/USER", HERMES_HOME="/home/USER/.hermes",
+                USER="ubuntu", LOGNAME="ubuntu")
 
 
-def _run_agent_job(job_id, prompt, model, provider):
-    """Jalankan hermes -z di background thread; hasil disimpan ke AGENT_JOBS."""
-    cmd = [HERMES_PY, "-m", "hermes_cli.main", "-z", prompt, "--cli"]
+def _history_block(history):
+    """Format riwayat percakapan sebagai konteks untuk prompt agent (kesinambungan sesi)."""
+    if not history:
+        return ""
+    rows = []
+    for m in (history or [])[-8:]:
+        if not isinstance(m, dict):
+            continue
+        role = "User" if str(m.get("role")) == "user" else "LeoAI"
+        content = str(m.get("content") or "").strip()
+        if content:
+            rows.append(f"{role}: {content[:1000]}")
+    if not rows:
+        return ""
+    return ("\n\n[Konteks percakapan sebelumnya — pesan-pesan ini sudah dibahas. "
+            "Gunakan untuk menjawab perintah baru di bawah; jangan mengulang jawaban lama.]\n"
+            + "\n".join(rows))
+
+
+def _run_agent_job(job_id, prompt, model, provider, history=None, session_id=""):
+    """Jalankan hermes -z di background thread; hasil disimpan ke AGENT_JOBS.
+    Partial stdout ditulis ke data/agent-jobs/<job_id>.live.txt utk ditampilkan
+    real-time sebagai "agent thinking" di UI."""
+    artifact_note = ("\n\n[LABS AGENT] Kerjakan sampai selesai. Jika membuat file/artifact, "
+                     "cantumkan setiap path absolut pada jawaban akhir dengan format MEDIA:/path/file.")
+    hb = _history_block(history)
+    full_prompt = (hb + "\n\n--- PERINTAH BARU ---\n" + prompt) if hb else prompt
+    cmd = [HERMES_PY, "-m", "hermes_cli.main", "-z", full_prompt + artifact_note, "--cli", "--yolo"]
     if model:
         cmd += ["-m", model]
     if provider:
+        provider = str(provider).strip()
+        if provider and provider not in {"openrouter", "nous", "anthropic", "openai"} and not provider.startswith("custom:"):
+            provider = "custom:" + provider
         cmd += ["--provider", provider]
+    live_path = AGENT_JOB_DIR / f"{job_id}.live.txt"
     proc = None
     try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 text=True, env=_agent_env())
         with _AGENT_LOCK:
             if job_id in AGENT_JOBS and AGENT_JOBS[job_id].get("cancel"):
@@ -421,9 +483,27 @@ def _run_agent_job(job_id, prompt, model, provider):
                     AGENT_JOBS[job_id].update(status="cancelled", done=True)
                 return
             AGENT_JOBS[job_id]["proc"] = proc
-        out, err = proc.communicate(timeout=600)
-        out_s = (out or "").strip()
-        err_s = (err or "").strip()
+            AGENT_JOBS[job_id]["session_id"] = session_id
+            AGENT_JOBS[job_id].update(phase="Agent aktif · menjalankan proses", updated_at=time.time())
+            _persist_agent_job(job_id)
+        # baca stdout baris demi baris -> simpan partial (live) + deteksi provider error
+        tail = []
+        while True:
+            line = proc.stdout.readline()
+            if not line:
+                break
+            line_s = line.rstrip("\n")
+            if line_s.strip():
+                tail.append(line_s)
+                if len(tail) > 200:
+                    tail.pop(0)
+            try:
+                live_path.write_text("\n".join(tail[-120:]), encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+        proc.wait(timeout=30)
+        out_s = "\n".join(tail).strip()
+        err_s = ""
         rc = proc.returncode
         with _AGENT_LOCK:
             was_cancelled = bool(AGENT_JOBS.get(job_id, {}).get("cancel"))
@@ -434,46 +514,143 @@ def _run_agent_job(job_id, prompt, model, provider):
         # deteksi kegagalan provider di stdout ATAU stderr (402/403/balance)
         combined = (out_s + " " + err_s).lower()
         if rc == 0 and out_s and not _looks_like_provider_error(combined):
-            result = {"status": "done", "done": True, "reply": out_s, "ok": True, "agent": True}
+            reply = out_s
+            for marker in ("FINAL ANSWER:", "Final answer:", "Assistant:"):
+                if marker in reply:
+                    reply = reply.rsplit(marker, 1)[-1].strip()
+                    break
+            result = {"status": "done", "done": True, "reply": reply, "ok": True, "agent": True,
+                      "attachments": _collect_attachments(job_id, reply)}
         elif _looks_like_provider_error(combined):
-            fb = _agent_chat_gatekey(prompt)
-            result = {"status": "done", "done": True, "ok": fb.get("ok"),
-                      "reply": fb.get("reply", ""), "agent": True, "fallback": fb.get("fallback")}
-            if not fb.get("ok"):
-                result["error"] = fb.get("error")
+            fallback_cmd = [HERMES_PY, "-m", "hermes_cli.main", "-z", full_prompt + artifact_note,
+                            "--cli", "--yolo", "-m", "gatekey-unlimited-deepseek-v4-flash",
+                            "--provider", "custom:Gatekey"]
+            proc = subprocess.Popen(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    text=True, env=_agent_env())
+            with _AGENT_LOCK:
+                AGENT_JOBS[job_id]["proc"] = proc
+                AGENT_JOBS[job_id].update(phase="Provider utama gagal · Agent fallback aktif",
+                                          provider="custom:Gatekey",
+                                          model="gatekey-unlimited-deepseek-v4-flash",
+                                          updated_at=time.time())
+                _persist_agent_job(job_id)
+            fb_tail = []
+            while True:
+                line = proc.stdout.readline()
+                if not line:
+                    break
+                line_s = line.rstrip("\n")
+                if line_s.strip():
+                    fb_tail.append(line_s)
+                    if len(fb_tail) > 200:
+                        fb_tail.pop(0)
+                try:
+                    live_path.write_text("\n".join(fb_tail[-120:]), encoding="utf-8", errors="replace")
+                except Exception:
+                    pass
+            proc.wait(timeout=30)
+            fb_reply = "\n".join(fb_tail).strip()
+            fb_err = ""
+            fb_combined = (fb_reply + " " + fb_err).lower()
+            if proc.returncode == 0 and fb_reply and not _looks_like_provider_error(fb_combined):
+                result = {"status": "done", "done": True, "ok": True, "reply": fb_reply,
+                          "agent": True, "fallback": "Gatekey Agent",
+                          "attachments": _collect_attachments(job_id, fb_reply)}
+            else:
+                result = {"status": "error", "done": True, "ok": False,
+                          "error": (fb_err or fb_reply or "Semua provider Agent gagal")[-500:]}
         else:
             result = {"status": "error", "done": True, "ok": False,
                       "error": err_s[-300:] or f"Agent gagal (exit {rc})"}
         with _AGENT_LOCK:
             AGENT_JOBS[job_id].update(result)
+            AGENT_JOBS[job_id].update(updated_at=time.time(), phase="Selesai" if result.get("ok") else "Gagal")
+            _persist_agent_job(job_id)
     except Exception as e:
         if proc and proc.poll() is None:
             proc.kill()
         with _AGENT_LOCK:
             AGENT_JOBS[job_id].update(status="error", done=True, ok=False,
-                                      error=str(e)[:300])
+                                      error=str(e)[:300], phase="Gagal", updated_at=time.time())
+            _persist_agent_job(job_id)
     finally:
         with _AGENT_LOCK:
             if job_id in AGENT_JOBS:
                 AGENT_JOBS[job_id]["proc"] = None
 
 
+
 def _looks_like_provider_error(text):
     return any(k in text for k in ("http 402", "http 403", "http 429",
-                                   "insufficient balance", "402 payment",
+                                   "http 500", "http 502", "http 503", "http 504",
+                                   "api call failed", "failed after 3 retries",
+                                   "insufficient balance", "insufficient_balance",
                                    "quota", "rate limit", "x-relay-target",
                                    "authentication_required"))
 
 
-def start_agent_job(prompt, model="", provider=""):
+def _collect_attachments(job_id, reply):
+    """Salin artifact yang disebut agent ke store; path lain tidak ikut terekspos."""
+    found, out = set(), []
+    for raw in re.findall(r"MEDIA:([^\s<>]+)", reply or ""):
+        try:
+            src = Path(raw.strip().strip("'\".,)")).expanduser().resolve()
+            if not src.is_file() or src.stat().st_size > 200 * 1024 * 1024:
+                continue
+            if not any(str(src).startswith(root) for root in ("/home/USER/", "/tmp/")):
+                continue
+            if str(src) in found:
+                continue
+            found.add(str(src))
+            dst_dir = ATTACHMENT_DIR / job_id
+            dst_dir.mkdir(parents=True, exist_ok=True)
+            name = re.sub(r"[^A-Za-z0-9._-]+", "_", src.name)[:120] or "artifact"
+            dst = dst_dir / name
+            if dst.exists():
+                dst = dst_dir / (src.stem[:80] + "_" + os.urandom(3).hex() + src.suffix)
+            shutil.copy2(src, dst)
+            out.append({"id": f"{job_id}/{dst.name}", "name": dst.name,
+                        "size": dst.stat().st_size, "created_at": time.time()})
+        except OSError:
+            continue
+    return out
+
+
+def list_attachments():
+    rows = []
+    if not ATTACHMENT_DIR.exists():
+        return rows
+    for p in ATTACHMENT_DIR.glob("*/*"):
+        if p.is_file():
+            st = p.stat()
+            rows.append({"id": f"{p.parent.name}/{p.name}", "job_id": p.parent.name,
+                         "name": p.name, "size": st.st_size, "created_at": st.st_mtime})
+    return sorted(rows, key=lambda x: x["created_at"], reverse=True)[:300]
+
+
+def attachment_path(attachment_id):
+    try:
+        p = (ATTACHMENT_DIR / attachment_id).resolve()
+        return p if p.is_file() and p.is_relative_to(ATTACHMENT_DIR.resolve()) else None
+    except (OSError, ValueError):
+        return None
+
+
+def start_agent_job(prompt, model="", provider="", history=None, session_id=""):
     """Mulai agent job async. Return job_id."""
     if not prompt or not prompt.strip():
         return None
     job_id = _new_job_id()
     with _AGENT_LOCK:
         AGENT_JOBS[job_id] = {"id": job_id, "status": "running", "done": False,
-                              "cancel": False, "proc": None, "prompt": prompt[:100]}
-    t = threading.Thread(target=_run_agent_job, args=(job_id, prompt, model, provider),
+                              "cancel": False, "proc": None, "prompt": prompt[:100],
+                              "model": model, "provider": provider,
+                              "session_id": session_id,
+                              "phase": "Menyiapkan agent", "created_at": time.time(),
+                              "updated_at": time.time()}
+        _persist_agent_job(job_id)
+    t = threading.Thread(target=_run_agent_job,
+                         args=(job_id, prompt, model, provider, history, session_id),
                          daemon=True)
     t.start()
     return job_id
@@ -483,8 +660,38 @@ def agent_job_status(job_id):
     with _AGENT_LOCK:
         j = AGENT_JOBS.get(job_id)
         if not j:
+            j = _load_agent_job(job_id)
+            if j and j.get("status") == "running":
+                j.update(status="error", done=True, ok=False, phase="Terputus",
+                         error="Proses Agent terputus karena Labs restart. Kirim ulang perintah.",
+                         updated_at=time.time())
+                AGENT_JOBS[job_id] = j
+                _persist_agent_job(job_id)
+        if not j:
             return {"status": "error", "done": True, "ok": False, "error": "Job tidak dikenal"}
-        return {k: v for k, v in j.items() if k != "proc"}
+        out = {k: v for k, v in j.items() if k != "proc"}
+        out["elapsed"] = max(0, int(time.time() - float(out.get("created_at") or time.time())))
+        # live output (agent thinking) — baca snapshot terakhir dari file
+        live = AGENT_JOB_DIR / f"{job_id}.live.txt"
+        try:
+            if live.exists() and out.get("status") == "running":
+                out["live_output"] = live.read_text(encoding="utf-8", errors="replace")[-1500:]
+            else:
+                out["live_output"] = ""
+        except Exception:
+            out["live_output"] = ""
+        return out
+
+
+def mark_agent_job_recorded(job_id):
+    with _AGENT_LOCK:
+        j = AGENT_JOBS.get(job_id) or _load_agent_job(job_id)
+        if not j:
+            return False
+        j["recorded"] = True
+        AGENT_JOBS[job_id] = j
+        _persist_agent_job(job_id)
+        return True
 
 
 def cancel_agent_job(job_id):
