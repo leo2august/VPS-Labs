@@ -21,6 +21,7 @@ import lab_snapshot
 import lab_crud
 import lab_webui
 import lab_provider
+import lab_proxy
 import lab_security
 import lab_backup
 import lab_operations
@@ -873,6 +874,27 @@ def api_lab_router_login_poll():
 @login_required
 def api_lab_failover():
     return jsonify(lab_failover.failover_status())
+
+
+# ---- Labs API Proxy (OpenAI-compatible, twin without 9router) ----
+@app.route("/v1/chat/completions", methods=["POST"])
+@login_required
+def api_v1_chat_completions():
+    body = request.get_json(force=True, silent=True) or {}
+    data, status = lab_proxy.chat_completions(body)
+    resp = app.response_class(
+        response=json.dumps(data, ensure_ascii=False),
+        status=status,
+        mimetype="application/json",
+    )
+    return resp
+
+
+@app.route("/v1/models", methods=["GET"])
+@login_required
+def api_v1_models():
+    models = lab_proxy.list_models()
+    return jsonify({"object": "list", "data": [{"id": m, "object": "model"} for m in models]})
 
 
 @app.get("/api/lab/cron-jobs")
