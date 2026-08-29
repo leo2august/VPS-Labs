@@ -1,6 +1,9 @@
 package com.leo2agust.labs;
 
 import android.content.Context;
+import android.app.PendingIntent;
+import android.appwidget.AppWidgetManager;
+import android.content.Intent;
 import android.webkit.CookieManager;
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -8,6 +11,9 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import org.json.JSONObject;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 final class WidgetHttp {
     private WidgetHttp() {}
@@ -34,7 +40,9 @@ final class WidgetHttp {
         connection.setReadTimeout(8000);
         connection.setRequestProperty("Accept", "application/json");
         connection.setRequestProperty("User-Agent", "LabsWidget/1.0");
-        String cookie = CookieManager.getInstance().getCookie(base);
+        String cookie = context.getSharedPreferences("labs_prefs", Context.MODE_PRIVATE)
+                .getString("widget_cookie", "");
+        if (cookie.trim().isEmpty()) cookie = CookieManager.getInstance().getCookie(base);
         if (cookie != null && !cookie.trim().isEmpty()) {
             connection.setRequestProperty("Cookie", cookie);
         }
@@ -56,6 +64,35 @@ final class WidgetHttp {
 
     static int percent(double value) {
         return (int) Math.max(0, Math.min(100, Math.round(value)));
+    }
+
+    static void persistCookie(Context context) {
+        String base = base(context);
+        if (base.isEmpty()) return;
+        String cookie = CookieManager.getInstance().getCookie(base);
+        if (cookie != null && !cookie.trim().isEmpty()) {
+            context.getSharedPreferences("labs_prefs", Context.MODE_PRIVATE).edit()
+                    .putString("widget_cookie", cookie).apply();
+        }
+    }
+
+    static PendingIntent refresh(Context context, Class<?> provider, int widgetId, int request) {
+        Intent intent = new Intent(context, provider);
+        intent.setAction("com.leo2agust.labs.REFRESH_WIDGET");
+        intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId);
+        return PendingIntent.getBroadcast(context, request + widgetId, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    static String updatedNow() {
+        return "Diperbarui " + new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+    }
+
+    static String eventTime(JSONObject event) {
+        if (event == null) return "--:--";
+        long seconds = (long) event.optDouble("timestamp", 0);
+        if (seconds <= 0) return "--:--";
+        return new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date(seconds * 1000L));
     }
 
     private static String read(InputStream stream) throws Exception {

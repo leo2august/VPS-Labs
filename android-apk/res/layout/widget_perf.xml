@@ -12,6 +12,9 @@
         <TextView android:id="@+id/wp_title" android:layout_width="0dp" android:layout_height="wrap_content"
             android:layout_weight="1" android:text="Labs" android:textColor="#F6F1E7"
             android:textSize="16sp" android:textStyle="bold" />
+        <TextView android:id="@+id/wp_refresh" android:layout_width="36dp" android:layout_height="36dp"
+            android:gravity="center" android:text="↻" android:contentDescription="Perbarui widget"
+            android:textColor="#53BCE6" android:textSize="22sp" />
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:text="PERFORMANCE" android:textColor="#DDBA55" android:textSize="9sp"
             android:textStyle="bold" android:letterSpacing="0.12" />

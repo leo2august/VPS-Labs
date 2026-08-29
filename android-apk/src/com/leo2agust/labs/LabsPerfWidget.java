@@ -11,6 +11,13 @@ import android.widget.RemoteViews;
 import org.json.JSONObject;
 
 public class LabsPerfWidget extends AppWidgetProvider {
+    @Override public void onReceive(Context context, Intent intent) {
+        super.onReceive(context, intent);
+        if ("com.leo2agust.labs.REFRESH_WIDGET".equals(intent.getAction())) {
+            int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+            if (id != AppWidgetManager.INVALID_APPWIDGET_ID) update(context, AppWidgetManager.getInstance(context), id);
+        }
+    }
     @Override public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
         for (int id : ids) update(context, manager, id);
     }
@@ -18,6 +25,7 @@ public class LabsPerfWidget extends AppWidgetProvider {
     static void update(final Context context, final AppWidgetManager manager, final int id) {
         RemoteViews loading = views(context, "—", "—", "—", "Menghubungkan server…");
         loading.setOnClickPendingIntent(R.id.wp_root, openApp(context, 21));
+        loading.setOnClickPendingIntent(R.id.wp_refresh, WidgetHttp.refresh(context, LabsPerfWidget.class, id, 2100));
         manager.updateAppWidget(id, loading);
         new Thread(new Runnable() {
             public void run() {
@@ -28,12 +36,13 @@ public class LabsPerfWidget extends AppWidgetProvider {
                     ram = WidgetHttp.percent(data.optDouble("memory", 0)) + "%";
                     disk = WidgetHttp.percent(data.optDouble("disk", 0)) + "%";
                     int processes = data.optInt("processes", 0);
-                    meta = processes + " processes · tap untuk detail";
+                    meta = processes + " proses · " + WidgetHttp.updatedNow();
                 } catch (Exception error) {
                     meta = WidgetHttp.errorText(error);
                 }
                 final RemoteViews result = views(context, cpu, ram, disk, meta);
                 result.setOnClickPendingIntent(R.id.wp_root, openApp(context, 21));
+                result.setOnClickPendingIntent(R.id.wp_refresh, WidgetHttp.refresh(context, LabsPerfWidget.class, id, 2100));
                 new Handler(Looper.getMainLooper()).post(new Runnable() {
                     public void run() { manager.updateAppWidget(id, result); }
                 });

@@ -124,6 +124,7 @@ public class MainActivity extends Activity {
                 injectBrand();
                 if (url != null && !url.contains("/login")) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) CookieManager.getInstance().flush();
+                    WidgetHttp.persistCookie(MainActivity.this);
                     refreshWidgets();
                 }
             }

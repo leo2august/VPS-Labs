@@ -63,13 +63,13 @@ public class SettingsActivity extends Activity {
         urlInput.setText(prefs.getString("labs_url", ""));
         urlInput.setTextSize(14);
         urlInput.setSingleLine(true);
-        urlInput.setHint("https://labs.domain-kamu.com");
+        urlInput.setHint("https://labs.domain.com atau http://IP_VPS:9118");
         urlInput.setPadding(dp(12), dp(10), dp(12), dp(10));
         urlInput.setBackground(rounded(Color.parseColor("#ffffff"), Color.parseColor("#d8d2c5")));
         root.addView(urlInput);
 
         TextView urlHelp = new TextView(this);
-        urlHelp.setText("Wajib diisi — alamat server Labs kamu sendiri. Jangan pakai URL orang lain.");
+        urlHelp.setText("Domain: pakai HTTPS. IP VPS: isi http://IP_VPS:9118; gunakan lewat VPN/private network karena HTTP tidak terenkripsi.");
         urlHelp.setTextSize(11);
         urlHelp.setTextColor(Color.parseColor("#8896a8"));
         urlHelp.setPadding(0, dp(6), 0, dp(16));
@@ -207,7 +207,9 @@ public class SettingsActivity extends Activity {
         if (url.isEmpty()) {
             url = MainActivity.LABS_URL;
         }
-        if (!url.isEmpty() && !url.startsWith("http")) url = "https://" + url;
+        if (!url.isEmpty() && !url.startsWith("http")) {
+            url = url.matches("^\\d{1,3}(\\.\\d{1,3}){3}(:\\d+)?$") ? "http://" + url : "https://" + url;
+        }
         String brand = brandInput.getText().toString().trim();
         if (brand.isEmpty()) {
             brand = detectBrandFromUrl(url);
@@ -238,6 +240,8 @@ public class SettingsActivity extends Activity {
             String[] parts = host.split("\\.");
             if (parts.length >= 3 && parts[0].equals("labs")) {
                 return parts[1];
+            } else if (host.matches("^\\d{1,3}(\\.\\d{1,3}){3}$")) {
+                return "Labs VPS";
             } else if (parts.length >= 2) {
                 return parts[0];
             }

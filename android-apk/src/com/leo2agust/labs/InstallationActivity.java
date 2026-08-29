@@ -49,7 +49,7 @@ public class InstallationActivity extends Activity {
         content.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Labs adalah dashboard VPS yang berjalan di server kamu sendiri. Ada 2 cara install.");
+        sub.setText("Labs berjalan di VPS kamu. Akses bisa lewat domain HTTPS atau langsung IP VPS.");
         sub.setTextSize(12);
         sub.setTextColor(Color.parseColor("#8896a8"));
         sub.setPadding(0, dp(6), 0, dp(18));
@@ -65,7 +65,21 @@ public class InstallationActivity extends Activity {
         content.addView(stepText("4. Jalankan installer:"));
         content.addView(code("sudo bash install.sh"));
         content.addView(stepText("5. Ikuti prompt: isi nama branding, port, dan password admin."));
-        content.addView(stepText("6. Setelah selesai, buka https://DOMAIN_ATAU_IP:9118 dan login."));
+        content.addView(stepText("6. Pilih jalur akses di bawah, lalu login."));
+
+        content.addView(stepTitle("AKSES A — Domain + HTTPS (disarankan)"));
+        content.addView(stepText("1. Arahkan DNS domain/subdomain ke IP VPS."));
+        content.addView(stepText("2. Reverse proxy domain ke 127.0.0.1:9118 memakai Caddy/Nginx."));
+        content.addView(code("labs.domain.com {\n    reverse_proxy 127.0.0.1:9118\n}"));
+        content.addView(stepText("3. Isi Settings: https://labs.domain.com"));
+
+        content.addView(stepTitle("AKSES B — Langsung IP VPS"));
+        content.addView(stepText("1. Set NUVULABS_HOST=0.0.0.0 pada Environment service Labs, lalu restart service."));
+        content.addView(code("NUVULABS_HOST=0.0.0.0\nNUVULABS_PORT=9118\nNUVULABS_SECURE_COOKIE=0"));
+        content.addView(stepText("2. Izinkan port 9118 hanya dari IP kamu/VPN di firewall."));
+        content.addView(code("sudo ufw allow from IP_KAMU to any port 9118 proto tcp"));
+        content.addView(stepText("3. Isi Settings: http://IP_VPS:9118"));
+        content.addView(stepText("Peringatan: HTTP publik tidak terenkripsi. Pakai VPN/private network; jangan buka port 9118 untuk semua alamat."));
 
         // Opsi B
         content.addView(stepTitle("CARA B — Pakai Agen / AI Assistant"));
@@ -79,7 +93,7 @@ public class InstallationActivity extends Activity {
 
         // Setelah instal
         content.addView(stepTitle("Setelah instal"));
-        content.addView(stepText("1. Buka Settings app ini (⚙️) → isi URL server kamu (mis. https://labs.domain-kamu.com)."));
+        content.addView(stepText("1. Buka Settings app ini (⚙️) → isi URL domain HTTPS atau http://IP_VPS:9118."));
         content.addView(stepText("2. Simpan, lalu app otomatis memuat dashboard Labs kamu."));
 
         Button open = new Button(this);

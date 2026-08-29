@@ -11,6 +11,13 @@ import android.widget.RemoteViews;
 import org.json.JSONObject;
 
 public class LabsStorageWidget extends AppWidgetProvider {
+    @Override public void onReceive(Context context, Intent intent) {
+        super.onReceive(context, intent);
+        if ("com.leo2agust.labs.REFRESH_WIDGET".equals(intent.getAction())) {
+            int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+            if (id != AppWidgetManager.INVALID_APPWIDGET_ID) update(context, AppWidgetManager.getInstance(context), id);
+        }
+    }
     @Override public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
         for (int id : ids) update(context, manager, id);
     }
@@ -18,6 +25,7 @@ public class LabsStorageWidget extends AppWidgetProvider {
     static void update(final Context context, final AppWidgetManager manager, final int id) {
         RemoteViews loading = views(context, "—", "—", "—", "Memuat kapasitas…");
         loading.setOnClickPendingIntent(R.id.wd_root, openApp(context));
+        loading.setOnClickPendingIntent(R.id.wd_refresh, WidgetHttp.refresh(context, LabsStorageWidget.class, id, 2300));
         manager.updateAppWidget(id, loading);
         new Thread(new Runnable() {
             public void run() {
@@ -29,12 +37,13 @@ public class LabsStorageWidget extends AppWidgetProvider {
                     long usedBytes = data.optLong("disk_used", 0);
                     used = size(usedBytes);
                     free = size(Math.max(0, total - usedBytes));
-                    meta = "Storage server utama";
+                    meta = WidgetHttp.updatedNow();
                 } catch (Exception error) {
                     meta = WidgetHttp.errorText(error);
                 }
                 final RemoteViews result = views(context, disk, used, free, meta);
                 result.setOnClickPendingIntent(R.id.wd_root, openApp(context));
+                result.setOnClickPendingIntent(R.id.wd_refresh, WidgetHttp.refresh(context, LabsStorageWidget.class, id, 2300));
                 new Handler(Looper.getMainLooper()).post(new Runnable() {
                     public void run() { manager.updateAppWidget(id, result); }
                 });

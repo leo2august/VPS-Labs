@@ -1235,5 +1235,6 @@ if __name__ == "__main__":
         pass
     if not last_audit["checks"]: threading.Thread(target=run_audit, daemon=True).start()
     threading.Thread(target=lab_failover.scheduler_loop, kwargs={"interval": 300}, daemon=True).start()
-    app.run(host="127.0.0.1", port=9118)
+    # Default tetap privat. Set NUVULABS_HOST=0.0.0.0 hanya untuk akses IP yang dibatasi firewall/VPN.
+    app.run(host=os.environ.get("NUVULABS_HOST", "127.0.0.1"), port=int(os.environ.get("NUVULABS_PORT", "9118")))
 

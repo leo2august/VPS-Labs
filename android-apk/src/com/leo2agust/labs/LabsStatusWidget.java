@@ -14,6 +14,13 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 public class LabsStatusWidget extends AppWidgetProvider {
+    @Override public void onReceive(Context context, Intent intent) {
+        super.onReceive(context, intent);
+        if ("com.leo2agust.labs.REFRESH_WIDGET".equals(intent.getAction())) {
+            int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+            if (id != AppWidgetManager.INVALID_APPWIDGET_ID) update(context, AppWidgetManager.getInstance(context), id);
+        }
+    }
     @Override
     public void onUpdate(Context context, AppWidgetManager mgr, int[] ids) {
         for (int id : ids) update(context, mgr, id);
@@ -26,6 +33,7 @@ public class LabsStatusWidget extends AppWidgetProvider {
         v.setOnClickPendingIntent(R.id.ws_root, PendingIntent.getActivity(ctx, 0,
             new Intent(ctx, MainActivity.class),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+        v.setOnClickPendingIntent(R.id.ws_refresh, WidgetHttp.refresh(ctx, LabsStatusWidget.class, wid, 2000));
         mgr.updateAppWidget(wid, v);
         check(ctx, mgr, wid);
     }
@@ -55,8 +63,12 @@ public class LabsStatusWidget extends AppWidgetProvider {
                 new Handler(Looper.getMainLooper()).post(new Runnable() {
                     public void run() {
                         RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_status);
-                        v.setTextViewText(R.id.ws_status, fr);
+                        v.setTextViewText(R.id.ws_title, WidgetHttp.brand(ctx));
+                        v.setTextViewText(R.id.ws_status, fr + " · " + WidgetHttp.updatedNow());
                         v.setTextColor(R.id.ws_dot, fc);
+                        v.setOnClickPendingIntent(R.id.ws_root, PendingIntent.getActivity(ctx, wid,
+                            new Intent(ctx, MainActivity.class), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+                        v.setOnClickPendingIntent(R.id.ws_refresh, WidgetHttp.refresh(ctx, LabsStatusWidget.class, wid, 2000));
                         mgr.updateAppWidget(wid, v);
                     }
                 });

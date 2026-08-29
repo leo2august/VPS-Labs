@@ -12,6 +12,13 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class LabsLogWidget extends AppWidgetProvider {
+    @Override public void onReceive(Context context, Intent intent) {
+        super.onReceive(context, intent);
+        if ("com.leo2agust.labs.REFRESH_WIDGET".equals(intent.getAction())) {
+            int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+            if (id != AppWidgetManager.INVALID_APPWIDGET_ID) update(context, AppWidgetManager.getInstance(context), id);
+        }
+    }
     @Override public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
         for (int id : ids) update(context, manager, id);
     }
@@ -19,6 +26,7 @@ public class LabsLogWidget extends AppWidgetProvider {
     static void update(final Context context, final AppWidgetManager manager, final int id) {
         RemoteViews loading = views(context, "Mengambil aktivitas…", "", "", "LIVE");
         loading.setOnClickPendingIntent(R.id.wl_root, openApp(context));
+        loading.setOnClickPendingIntent(R.id.wl_refresh, WidgetHttp.refresh(context, LabsLogWidget.class, id, 2200));
         manager.updateAppWidget(id, loading);
         new Thread(new Runnable() {
             public void run() {
@@ -38,6 +46,7 @@ public class LabsLogWidget extends AppWidgetProvider {
                 }
                 final RemoteViews result = views(context, line1, line2, line3, badge);
                 result.setOnClickPendingIntent(R.id.wl_root, openApp(context));
+                result.setOnClickPendingIntent(R.id.wl_refresh, WidgetHttp.refresh(context, LabsLogWidget.class, id, 2200));
                 new Handler(Looper.getMainLooper()).post(new Runnable() {
                     public void run() { manager.updateAppWidget(id, result); }
                 });
@@ -50,7 +59,7 @@ public class LabsLogWidget extends AppWidgetProvider {
         String phase = event.optString("phase", "event").toUpperCase();
         String text = event.optString("summary", "Aktivitas Labs");
         if (text.length() > 54) text = text.substring(0, 51) + "…";
-        return phase + "  ·  " + text;
+        return WidgetHttp.eventTime(event) + "  ·  " + phase + "  ·  " + text;
     }
 
     private static RemoteViews views(Context context, String a, String b, String c, String badge) {
