@@ -240,11 +240,12 @@ KIRO_REDIRECT = "kiro://kiro.kiroAgent/authenticate-success"
 
 
 def kiro_build_social_url(provider, code_challenge, state):
-    """Build kiro social login URL (mirrors 9router's buildSocialLoginUrl)."""
+    """Build kiro social login URL (mirrors 9router's buildSocialLoginUrl exactly)."""
     idp = "Google" if provider == "google" else "Github"
     import urllib.parse
+    redirect_enc = urllib.parse.quote(KIRO_REDIRECT, safe='')
     return (f"{KIRO_SOCIAL_BASE}/login?idp={idp}"
-            f"&redirect_uri={urllib.parse.quote(KIRO_REDIRECT)}"
+            f"&redirect_uri={redirect_enc}"
             f"&code_challenge={code_challenge}&code_challenge_method=S256"
             f"&state={state}&prompt=select_account")
 
