@@ -9,6 +9,7 @@ import android.webkit.WebViewClient;
 import android.webkit.CookieManager;
 import android.webkit.WebSettings;
 import android.webkit.JavascriptInterface;
+import android.webkit.DownloadListener;
 import android.widget.LinearLayout;
 import android.widget.Button;
 import android.graphics.Color;
@@ -18,8 +19,18 @@ import android.content.res.Configuration;
 import android.content.SharedPreferences;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
-import android.view.KeyEvent;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.webkit.URLUtil;
+import android.widget.Toast;
+import android.app.DownloadManager;
+import android.net.Uri;
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ArrayList;
@@ -40,6 +51,7 @@ public class MainActivity extends Activity {
         {"config", "Config", "⚙"},
     };
     private static final String[] TAB_KEYS = {"tab_overview","tab_performance","tab_services","tab_chat","tab_config"};
+    private static final int REQ_STORAGE = 2001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,7 +68,6 @@ public class MainActivity extends Activity {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         root.setBackgroundColor(Color.parseColor("#f5f1e9"));
 
-        // WebView
         webView = new WebView(this);
         LinearLayout.LayoutParams wvParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
@@ -70,8 +81,8 @@ public class MainActivity extends Activity {
         ws.setCacheMode(WebSettings.LOAD_DEFAULT);
         ws.setLoadWithOverviewMode(true);
         ws.setUseWideViewPort(true);
-        ws.setAllowFileAccess(false);
-        ws.setAllowContentAccess(false);
+        ws.setAllowFileAccess(true);
+        ws.setAllowContentAccess(true);
         ws.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         ws.setUserAgentString(ws.getUserAgentString() + " LabsAPK/1.0");
 
@@ -94,12 +105,24 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 injectNavBridge();
+                updateNavForUrl(url);
             }
         });
 
         webView.setWebChromeClient(new WebChromeClient());
 
-        // JS interface: web -> native (page change from sidebar)
+        // Download attachments — simpan ke Download/Labs
+        webView.setDownloadListener(new DownloadListener() {
+            public void onDownloadStart(String url, String userAgent, String contentDisposition, String mimetype, long contentLength) {
+                try {
+                    String fileName = URLUtil.guessFileName(url, contentDisposition, mimetype);
+                    requestStorageIfNeeded(url, userAgent, contentDisposition, mimetype, fileName);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Download gagal: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+
         webView.addJavascriptInterface(new Object() {
             @JavascriptInterface
             public void onPageChange(final String page) {
@@ -107,7 +130,6 @@ public class MainActivity extends Activity {
             }
         }, "LabsBridge");
 
-        // Bottom navigation bar (native) — tab diambil dari prefs
         bottomNav = new LinearLayout(this);
         bottomNav.setOrientation(LinearLayout.HORIZONTAL);
         bottomNav.setLayoutParams(new LinearLayout.LayoutParams(
@@ -126,6 +148,104 @@ public class MainActivity extends Activity {
         } else {
             webView.loadUrl(baseUrl);
         }
+
+        // Cek update dari GitHub Releases (setelah 3 detik, sekali saat app dibuka)
+        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+            public void run() {
+                UpdateChecker.check(MainActivity.this, true, null);
+            }
+        }, 3000);
+    }
+
+    private void requestStorageIfNeeded(final String url, final String ua, final String cd, final String mime, final String fileName) {
+        boolean need = false;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            need = checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED;
+        }
+        if (need) {
+            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_STORAGE);
+            // simpan pending download utk dilanjutkan setelah grant
+            pendingUrl = url; pendingUa = ua; pendingCd = cd; pendingMime = mime; pendingName = fileName;
+        } else {
+            doDownload(url, ua, cd, mime, fileName);
+        }
+    }
+
+    private String pendingUrl, pendingUa, pendingCd, pendingMime, pendingName;
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_STORAGE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && pendingUrl != null) {
+                doDownload(pendingUrl, pendingUa, pendingCd, pendingMime, pendingName);
+                pendingUrl = null;
+            } else {
+                Toast.makeText(this, "Izin penyimpanan ditolak — download dibatalkan.", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    private void doDownload(String url, String ua, String cd, String mime, String fileName) {
+        try {
+            File dir;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Labs");
+            } else {
+                dir = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Labs");
+            }
+            if (!dir.exists()) dir.mkdirs();
+            File out = new File(dir, fileName);
+            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+            req.setTitle(fileName);
+            req.setDescription("Labs attachment");
+            req.setDestinationUri(Uri.fromFile(out));
+            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            dm.enqueue(req);
+            Toast.makeText(this, "Mengunduh ke Download/Labs/" + fileName, Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Download gagal: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void updateNavForUrl(String url) {
+        if (url != null && url.contains("/login")) {
+            // Halaman login → bottom nav cuma Login + Installation
+            runOnUiThread(new Runnable() { public void run() { buildLoginNav(); } });
+        } else {
+            runOnUiThread(new Runnable() { public void run() { buildBottomNav(); } });
+        }
+    }
+
+    private void buildLoginNav() {
+        navButtons.clear();
+        bottomNav.removeAllViews();
+        Button login = makeNavButton("__login", "Login", "🔐");
+        login.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                String base = prefs.getString("labs_url", LABS_URL);
+                webView.loadUrl(base + "/login");
+            }
+        });
+        bottomNav.addView(login);
+        Button inst = makeNavButton("__install", "Install", "📲");
+        inst.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                Intent i = new Intent(MainActivity.this, InstallationActivity.class);
+                startActivity(i);
+            }
+        });
+        bottomNav.addView(inst);
+        Button gear = makeNavButton("__settings", "Set", "⚙️");
+        gear.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                Intent i = new Intent(MainActivity.this, SettingsActivity.class);
+                startActivityForResult(i, 100);
+            }
+        });
+        bottomNav.addView(gear);
     }
 
     private void buildBottomNav() {
@@ -137,7 +257,6 @@ public class MainActivity extends Activity {
                 visible.add(NAV_ITEMS[i]);
             }
         }
-        // Always add Settings gear as last tab
         for (String[] item : visible) {
             Button btn = makeNavButton(item[0], item[1], item[2]);
             navButtons.put(item[0], btn);
@@ -169,7 +288,7 @@ public class MainActivity extends Activity {
         btn.setBackgroundColor(Color.TRANSPARENT);
         btn.setTextColor(Color.parseColor("#8896a8"));
         btn.setTag(page);
-        if (!page.equals("__settings")) {
+        if (!page.equals("__settings") && !page.equals("__login") && !page.equals("__install")) {
             final String p = page;
             btn.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) { navigateTo(p); }
@@ -182,7 +301,6 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == 100) {
-            // Settings berubah (URL / tab) → rebuild nav & reload URL
             buildBottomNav();
             String baseUrl = prefs.getString("labs_url", LABS_URL);
             String cur = webView.getUrl();

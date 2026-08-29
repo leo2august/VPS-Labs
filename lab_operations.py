@@ -9,6 +9,10 @@ from pathlib import Path
 STATE_DB = Path("/home/USER/.hermes/state.db")
 LAB_SETTINGS = Path(__file__).resolve().parent / "data" / "lab-settings.json"
 LAB_OPTIONS = {
+    "brand_name": {"label": "Nama Branding", "description": "Nama header/sidebar/login — isi bebas (mis. nama perusahaan atau tim).", "type": "text", "default": "Labs"},
+    "brand_sub": {"label": "Sub-judul Branding", "description": "Teks kecil di bawah nama (mis. Laboratory, Command Center).", "type": "text", "default": "Laboratory"},
+    "timezone": {"label": "Zona Waktu", "description": "Zona waktu untuk jam realtime & semua tampilan waktu.", "choices": [["Asia/Jakarta", "WIB — Jakarta (UTC+7)"], ["Asia/Makassar", "WITA — Makassar (UTC+8)"], ["Asia/Jayapura", "WIT — Jayapura (UTC+9)"], ["Asia/Singapore", "Singapura (UTC+8)"], ["UTC", "UTC"]], "default": "Asia/Jakarta"},
+    "time_format": {"label": "Format Jam", "description": "Tampilan jam 12 atau 24 jam.", "choices": [["24", "24 jam"], ["12", "12 jam (AM/PM)"]], "default": "24"},
     "theme": {"label": "Tema Labs", "description": "Warna seluruh dashboard Labs.", "choices": [["system", "Ikuti perangkat"], ["light", "Terang lembut"], ["dark", "Gelap nyaman"]], "default": "system"},
     "language": {"label": "Bahasa Labs", "description": "Bahasa label dan bantuan antarmuka Labs.", "choices": [["id", "Indonesia"], ["en", "English"]], "default": "id"},
     "visual_theme": {"label": "Nuansa Jepang", "description": "Palet visual Labs tanpa mengubah mode terang atau gelap.", "choices": [["seigaiha", "Seigaiha Biru"], ["sakura", "Sakura Senja"], ["matcha", "Matcha Mori"], ["indigo", "Aizome Indigo"], ["sumi", "Sumi Kintsugi"]], "default": "seigaiha"},
@@ -132,7 +136,12 @@ def get_lab_settings():
 
 
 def update_lab_setting(key, value):
-    if key not in LAB_OPTIONS or value not in {x[0] for x in LAB_OPTIONS[key]["choices"]}:
+    if key not in LAB_OPTIONS:
+        return {"ok": False, "error": "pilihan tidak valid"}
+    opt = LAB_OPTIONS[key]
+    if opt.get("type") == "text":
+        value = str(value)[:60]
+    elif value not in {x[0] for x in opt["choices"]}:
         return {"ok": False, "error": "pilihan tidak valid"}
     current = get_lab_settings()["values"]; current[key] = value
     LAB_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
