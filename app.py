@@ -854,7 +854,7 @@ def api_lab_router_account_api_key():
 def api_lab_router_login_start():
     b = request.get_json(force=True) or {}
     try:
-        return jsonify(lab_router_accounts.start_device_login(b.get("provider")))
+        return jsonify(lab_router_accounts.start_device_login(b.get("provider"), b.get("account_id") or ""))
     except ValueError as exc:
         return jsonify(ok=False, error=str(exc)), 400
 

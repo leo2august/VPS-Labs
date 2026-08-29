@@ -373,47 +373,16 @@ def create_api_key(provider, name, api_key):
     return {"ok": True, "connection": data.get("connection", data)}
 
 
-def start_device_login(provider):
-    provider = str(provider or "").lower()
-    if provider not in DEVICE_PROVIDERS:
-        return {"ok": False, "error": "provider login tidak didukung"}
-    data = _call("GET", f"/api/oauth/{provider}/device-code")
-    device_code = data.get("device_code")
-    if not device_code:
-        return {"ok": False, "error": "device code tidak diterima"}
-    flow_id = uuid.uuid4().hex
-    with _lock:
-        _flows[flow_id] = {"provider": provider, "deviceCode": device_code,
-                           "codeVerifier": data.get("codeVerifier"),
-                           "extraData": data.get("extraData") or data,
-                           "expires": time.time() + min(int(data.get("expires_in", 600)), 900)}
-    return {"ok": True, "flow_id": flow_id, "provider": provider,
-            "user_code": data.get("user_code"),
-            "verification_uri": data.get("verification_uri"),
-            "verification_uri_complete": data.get("verification_uri_complete"),
-            "expires_in": data.get("expires_in", 600), "interval": max(3, int(data.get("interval", 5)))}
+def start_device_login(provider, account_id=""):
+    """Mulai device login — independent OAuth engine (no 9router)."""
+    from lab_oauth import start_device_login as _oauth_start
+    return _oauth_start(provider, account_id)
 
 
 def poll_device_login(flow_id):
-    with _lock:
-        flow = _flows.get(str(flow_id))
-    if not flow:
-        return {"ok": False, "error": "sesi login tidak ditemukan"}
-    if flow["expires"] < time.time():
-        with _lock: _flows.pop(str(flow_id), None)
-        return {"ok": False, "expired": True, "error": "sesi login kedaluwarsa"}
-    try:
-        data = _call("POST", f"/api/oauth/{flow['provider']}/poll",
-                     {"deviceCode": flow["deviceCode"], "codeVerifier": flow["codeVerifier"], "extraData": flow["extraData"]})
-    except ValueError as exc:
-        err = str(exc)
-        if err in ("authorization_pending", "slow_down"):
-            return {"ok": True, "pending": True}
-        return {"ok": False, "error": err}
-    if data.get("pending"):
-        return {"ok": True, "pending": True}
-    with _lock: _flows.pop(str(flow_id), None)
-    return {"ok": True, "pending": False, "connection": data.get("connection", data)}
+    """Poll status login — independent OAuth engine."""
+    from lab_oauth import poll_device_login as _oauth_poll
+    return _oauth_poll(flow_id)
 
 
 if __name__ == "__main__":
