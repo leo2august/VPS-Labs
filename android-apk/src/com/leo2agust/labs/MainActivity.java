@@ -43,16 +43,28 @@ public class MainActivity extends Activity {
     private Map<String, Button> navButtons = new HashMap<>();
     private SharedPreferences prefs;
     static final String LABS_URL = "";
+    // page id, label, compact icon, default visible (maks. 5 + Settings)
     static final String[][] NAV_ITEMS = {
-        {"overview", "Overview", "🏠"},
-        {"performance", "Perf", "📈"},
-        {"services", "Services", "🛠"},
-        {"chat", "Chat", "💬"},
-        {"config", "Config", "⚙"},
+        {"overview", "Overview", "OV", "1"},
+        {"performance", "Perf", "PF", "1"},
+        {"services", "Services", "SV", "1"},
+        {"chat", "Chat", "CH", "1"},
+        {"attachments", "Files", "FL", "1"},
+        {"activity", "Logs", "LG", "0"},
+        {"security", "Security", "SC", "0"},
+        {"storage", "Storage", "ST", "0"},
+        {"usage", "Usage", "US", "0"},
+        {"notifications", "Alerts", "NT", "0"},
+        {"router", "Router", "RT", "0"},
+        {"quota", "Quota", "QT", "0"},
+        {"backup", "Backup", "BK", "0"},
+        {"update", "Update", "UP", "0"},
+        {"sessions", "Sessions", "SS", "0"},
+        {"config", "Config", "CF", "0"}
     };
-    private static final String[] TAB_KEYS = {"tab_overview","tab_performance","tab_services","tab_chat","tab_config"};
     private static final int REQ_STORAGE = 2001;
     private boolean isLoginNav = false; // track nav state untuk cegah kedip
+    private long lastWidgetRefresh = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,6 +120,10 @@ public class MainActivity extends Activity {
                 injectNavBridge();
                 updateNavForUrl(url);
                 injectBrand();
+                if (url != null && !url.contains("/login")) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) CookieManager.getInstance().flush();
+                    refreshWidgets();
+                }
             }
         });
 
@@ -292,7 +308,8 @@ public class MainActivity extends Activity {
         bottomNav.removeAllViews();
         List<String[]> visible = new ArrayList<>();
         for (int i = 0; i < NAV_ITEMS.length; i++) {
-            if (prefs.getBoolean(TAB_KEYS[i], true)) {
+            boolean defaultOn = "1".equals(NAV_ITEMS[i][3]);
+            if (prefs.getBoolean("tab_" + NAV_ITEMS[i][0], defaultOn) && visible.size() < 5) {
                 visible.add(NAV_ITEMS[i]);
             }
         }
@@ -423,6 +440,24 @@ public class MainActivity extends Activity {
             + "saved.brand_name=bn;localStorage.setItem('labs-settings',JSON.stringify(saved));"
             + "})()";
         webView.evaluateJavascript(js, null);
+    }
+
+    private void refreshWidgets() {
+        long now = System.currentTimeMillis();
+        if (now - lastWidgetRefresh < 5000) return;
+        lastWidgetRefresh = now;
+        Class<?>[] providers = new Class<?>[]{LabsStatusWidget.class, LabsPerfWidget.class,
+                LabsLogWidget.class, LabsStorageWidget.class};
+        android.appwidget.AppWidgetManager manager = android.appwidget.AppWidgetManager.getInstance(this);
+        for (Class<?> provider : providers) {
+            android.content.ComponentName component = new android.content.ComponentName(this, provider);
+            int[] ids = manager.getAppWidgetIds(component);
+            if (ids.length == 0) continue;
+            Intent intent = new Intent(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE);
+            intent.setComponent(component);
+            intent.putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
+            sendBroadcast(intent);
+        }
     }
 
     private static String jsonStr(String s) {

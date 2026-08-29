@@ -1,61 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/wl_root"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@drawable/widget_bg"
-    android:padding="12dp">
+    android:id="@+id/wl_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@drawable/widget_bg" android:padding="15dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-        <TextView
-            android:id="@+id/wl_title"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Labs · Logs"
-            android:textColor="#f5f1e9"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="📜"
-            android:textSize="13sp" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/wl_title" android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="Labs · Process Logs" android:textColor="#F6F1E7"
+            android:textSize="15sp" android:textStyle="bold" />
+        <TextView android:id="@+id/wl_badge" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="LIVE" android:textColor="#79C99E" android:textSize="9sp" android:textStyle="bold"
+            android:letterSpacing="0.12" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/wl_line1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="—"
-        android:textColor="#9db0c9"
-        android:textSize="10.5sp" />
-    <TextView
-        android:id="@+id/wl_line2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="—"
-        android:textColor="#9db0c9"
-        android:textSize="10.5sp" />
-    <TextView
-        android:id="@+id/wl_line3"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="3dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="—"
-        android:textColor="#9db0c9"
-        android:textSize="10.5sp" />
+    <TextView android:id="@+id/wl_line1" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="12dp" android:maxLines="1" android:ellipsize="end"
+        android:text="Mengambil aktivitas…" android:textColor="#B9C6D8" android:textSize="11sp" />
+    <TextView android:id="@+id/wl_line2" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="7dp" android:maxLines="1" android:ellipsize="end"
+        android:text="" android:textColor="#91A4BB" android:textSize="11sp" />
+    <TextView android:id="@+id/wl_line3" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="7dp" android:maxLines="1" android:ellipsize="end"
+        android:text="" android:textColor="#71869F" android:textSize="11sp" />
 </LinearLayout>

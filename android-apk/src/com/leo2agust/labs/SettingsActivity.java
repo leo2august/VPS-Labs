@@ -23,7 +23,6 @@ public class SettingsActivity extends Activity {
     private EditText urlInput;
     private EditText brandInput;
     private CheckBox[] tabChecks = new CheckBox[MainActivity.NAV_ITEMS.length];
-    private static final String[] TAB_KEYS = {"tab_overview","tab_performance","tab_services","tab_chat","tab_config"};
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,19 +68,6 @@ public class SettingsActivity extends Activity {
         urlInput.setBackground(rounded(Color.parseColor("#ffffff"), Color.parseColor("#d8d2c5")));
         root.addView(urlInput);
 
-        // Auto-detect brand dari URL: labs.xxx.domain → xxx
-        urlInput.addTextChangedListener(new android.text.TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            public void onTextChanged(CharSequence s, int a, int b, int c) {
-                String t = s.toString().trim();
-                String detected = detectBrandFromUrl(t);
-                if (!detected.isEmpty()) {
-                    brandInput.setText(detected);
-                }
-            }
-            public void afterTextChanged(android.text.Editable s) {}
-        });
-
         TextView urlHelp = new TextView(this);
         urlHelp.setText("Wajib diisi — alamat server Labs kamu sendiri. Jangan pakai URL orang lain.");
         urlHelp.setTextSize(11);
@@ -106,21 +92,42 @@ public class SettingsActivity extends Activity {
         brandHelp.setPadding(0, dp(6), 0, dp(16));
         root.addView(brandHelp);
 
+        // Auto-detect Nama Labs setelah brandInput siap.
+        urlInput.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) {
+                String detected = detectBrandFromUrl(s.toString().trim());
+                if (!detected.isEmpty()) brandInput.setText(detected);
+            }
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+
         // Section: Bottom nav
-        root.addView(sectionLabel("NAVIGASI BAWAH (PILIH TAB)"));
+        root.addView(sectionLabel("NAVIGASI BAWAH · MAKSIMAL 5 MENU"));
         for (int i = 0; i < MainActivity.NAV_ITEMS.length; i++) {
-            CheckBox cb = new CheckBox(this);
-            cb.setText(MainActivity.NAV_ITEMS[i][1] + " — " + MainActivity.NAV_ITEMS[i][2]);
+            final CheckBox cb = new CheckBox(this);
+            cb.setText(MainActivity.NAV_ITEMS[i][2] + "   " + MainActivity.NAV_ITEMS[i][1]);
             cb.setTextSize(14);
             cb.setTextColor(Color.parseColor("#17243d"));
-            cb.setChecked(prefs.getBoolean(TAB_KEYS[i], true));
+            boolean defaultOn = "1".equals(MainActivity.NAV_ITEMS[i][3]);
+            cb.setChecked(prefs.getBoolean("tab_" + MainActivity.NAV_ITEMS[i][0], defaultOn));
             cb.setPadding(dp(4), dp(4), 0, dp(4));
+            cb.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    if (cb.isChecked() && selectedTabCount() > 5) {
+                        cb.setChecked(false);
+                        android.widget.Toast.makeText(SettingsActivity.this,
+                                "Maksimal 5 menu agar navigasi tetap terbaca.",
+                                android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
             tabChecks[i] = cb;
             root.addView(cb);
         }
 
         TextView navHelp = new TextView(this);
-        navHelp.setText("Tabs yang dicentang akan tampil di navigasi bawah app.");
+        navHelp.setText("Pilih menu sesuai kebutuhan. Settings selalu tersedia di sisi kanan.");
         navHelp.setTextSize(11);
         navHelp.setTextColor(Color.parseColor("#8896a8"));
         navHelp.setPadding(0, dp(6), 0, dp(18));
@@ -181,7 +188,7 @@ public class SettingsActivity extends Activity {
         if (url.isEmpty()) {
             url = MainActivity.LABS_URL;
         }
-        if (!url.startsWith("http")) url = "https://" + url;
+        if (!url.isEmpty() && !url.startsWith("http")) url = "https://" + url;
         String brand = brandInput.getText().toString().trim();
         if (brand.isEmpty()) {
             brand = detectBrandFromUrl(url);
@@ -190,11 +197,17 @@ public class SettingsActivity extends Activity {
         e.putString("labs_url", url);
         if (!brand.isEmpty()) e.putString("brand_name", brand);
         for (int i = 0; i < tabChecks.length; i++) {
-            e.putBoolean(TAB_KEYS[i], tabChecks[i].isChecked());
+            e.putBoolean("tab_" + MainActivity.NAV_ITEMS[i][0], tabChecks[i].isChecked());
         }
         e.apply();
         setResult(RESULT_OK);
         finish();
+    }
+
+    private int selectedTabCount() {
+        int count = 0;
+        for (CheckBox check : tabChecks) if (check != null && check.isChecked()) count++;
+        return count;
     }
 
     // Deteksi brand dari URL: https://labs.NAMA.domain → NAMA; https://NAMA.domain → NAMA
