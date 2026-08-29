@@ -52,6 +52,7 @@ public class MainActivity extends Activity {
     };
     private static final String[] TAB_KEYS = {"tab_overview","tab_performance","tab_services","tab_chat","tab_config"};
     private static final int REQ_STORAGE = 2001;
+    private boolean isLoginNav = false; // track nav state untuk cegah kedip
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -140,6 +141,7 @@ public class MainActivity extends Activity {
 
         String initBase = prefs.getString("labs_url", LABS_URL);
         if (initBase == null || initBase.trim().isEmpty()) {
+            isLoginNav = true;
             buildLoginNav();
         } else {
             buildBottomNav();
@@ -244,12 +246,16 @@ public class MainActivity extends Activity {
     }
 
     private void updateNavForUrl(String url) {
-        if (url != null && url.contains("/login")) {
-            // Halaman login → bottom nav cuma Login + Installation
+        boolean isLogin = url != null && url.contains("/login");
+        // Hanya rebuild kalau state nav benar-benar berubah (cegah kedip)
+        if (isLogin && !isLoginNav) {
+            isLoginNav = true;
             runOnUiThread(new Runnable() { public void run() { buildLoginNav(); } });
-        } else {
+        } else if (!isLogin && isLoginNav) {
+            isLoginNav = false;
             runOnUiThread(new Runnable() { public void run() { buildBottomNav(); } });
         }
+        // kalau state sama, jangan sentuh nav (tidak kedip)
     }
 
     private void buildLoginNav() {

@@ -702,6 +702,20 @@ def api_lab_attachment_download(attachment_id):
     return send_file(p, as_attachment=True, download_name=p.name)
 
 
+@app.post("/api/lab/attachments/delete")
+@login_required
+def api_lab_attachments_delete():
+    """Hapus attachment batch (multi-select). Body: {"ids": ["job/name", ...]}"""
+    body = request.get_json(force=True) or {}
+    ids = body.get("ids") or []
+    if not isinstance(ids, list) or not ids:
+        return jsonify(ok=False, error="Tidak ada attachment dipilih"), 400
+    if len(ids) > 200:
+        return jsonify(ok=False, error="Maksimal 200 item per penghapusan"), 400
+    result = lab_features.delete_attachments(ids)
+    return jsonify(ok=True, **result)
+
+
 @app.get("/api/lab/activity")
 @login_required
 def api_lab_activity():

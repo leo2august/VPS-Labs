@@ -25,8 +25,6 @@ Clean, self-contained template: no personal data, no secrets, no branding of any
 - **Hardened** — CSRF origin guard, SSRF-safe provider ping, rate-limited login, secure cookies, clickjacking/HSTS headers, path-traversal & zip-slip protection.
 
 
----
-
 ## ⚠️ Kepemilikan & Lisensi (Wajib Dibaca)
 
 **© 2026 Leo2agust — All Rights Reserved.**

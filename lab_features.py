@@ -636,6 +636,29 @@ def attachment_path(attachment_id):
         return None
 
 
+def delete_attachments(ids):
+    """Hapus attachment batch (id: 'job_id/name'). Hanya path di dalam ATTACHMENT_DIR."""
+    removed = 0
+    errors = []
+    base = ATTACHMENT_DIR.resolve()
+    for aid in ids or []:
+        try:
+            p = (ATTACHMENT_DIR / str(aid)).resolve()
+            if not p.is_file() or not p.is_relative_to(base):
+                errors.append(str(aid)); continue
+            p.unlink()
+            removed += 1
+            # hapus folder job kalau sudah kosong
+            parent = p.parent
+            try:
+                parent.rmdir()
+            except OSError:
+                pass
+        except OSError as e:
+            errors.append(str(aid))
+    return {"removed": removed, "errors": errors}
+
+
 def start_agent_job(prompt, model="", provider="", history=None, session_id=""):
     """Mulai agent job async. Return job_id."""
     if not prompt or not prompt.strip():
