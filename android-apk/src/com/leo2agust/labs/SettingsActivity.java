@@ -89,13 +89,13 @@ public class SettingsActivity extends Activity {
         urlHelp.setPadding(0, dp(6), 0, dp(16));
         root.addView(urlHelp);
 
-        // Section: Nama Branding
-        root.addView(sectionLabel("NAMA BRANDING (OTOMATIS)"));
+        // Section: Nama Labs
+        root.addView(sectionLabel("NAMA LABS (OTOMATIS)"));
         brandInput = new EditText(this);
         brandInput.setText(prefs.getString("brand_name", ""));
         brandInput.setTextSize(14);
         brandInput.setSingleLine(true);
-        brandInput.setHint("leo2agust");
+        brandInput.setHint("Nama Labs kamu");
         brandInput.setPadding(dp(12), dp(10), dp(12), dp(10));
         brandInput.setBackground(rounded(Color.parseColor("#ffffff"), Color.parseColor("#d8d2c5")));
         root.addView(brandInput);
