@@ -1,3 +1,10 @@
+"""
+⚠️  VPS Sentinel Labs — Copyright (c) 2026 Leo2agust. All Rights Reserved.
+    License: https://github.com/leo2august/VPS-Labs/blob/main/LICENSE
+    This software may be installed on your own server for personal use only.
+    Redistribution, forking, or claiming ownership is prohibited.
+"""
+
 #!/usr/bin/env python3
 import hmac, io, json, os, platform, re, smtplib, socket, sqlite3, subprocess, threading, time, zipfile
 from collections import deque

@@ -25,18 +25,6 @@ Clean, self-contained template: no personal data, no secrets, no branding of any
 - **Hardened** — CSRF origin guard, SSRF-safe provider ping, rate-limited login, secure cookies, clickjacking/HSTS headers, path-traversal & zip-slip protection.
 
 
-## ⚠️ Kepemilikan & Lisensi (Wajib Dibaca)
-
-**© 2026 Leo2agust — All Rights Reserved.**
-
-Repository ini **boleh di-install** di server pribadi Anda, tetapi **DILARANG**:
-membuat fork/re-copy ke akun GitHub lain, menerbitkan ulang, menjual, atau
-mengklaim kepemilikan atas kode, desain, dan aset di dalamnya.
-
-Gunakan **tombol "Use this template" / download ZIP** untuk men-deploy — bukan
-fork. Lihat [LICENSE](LICENSE) untuk ketentuan lengkap.
-
-
 ## Requirements
 
 - Python 3.10+
