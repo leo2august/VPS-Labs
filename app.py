@@ -388,7 +388,8 @@ def logout():
 @app.get("/")
 @login_required
 def index():
-    return render_template("index.html", host=socket.gethostname(), user=session.get("user", "operator"))
+    return render_template("index.html", host=socket.gethostname(), user=session.get("user", "operator"),
+                           brand_name=_lab_brand()[0])
 
 
 @app.get("/api/overview")
@@ -794,6 +795,17 @@ def api_lab_router_account_toggle():
     b = request.get_json(force=True) or {}
     try:
         return jsonify(lab_router_accounts.update_account(b.get("id"), b.get("enabled")))
+    except ValueError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+
+
+@app.post("/api/lab/router-account/toggle-provider")
+@login_required
+def api_lab_router_account_toggle_provider():
+    b = request.get_json(force=True) or {}
+    try:
+        result = lab_router_accounts.update_provider_accounts(b.get("provider"), b.get("enabled"))
+        return jsonify(result), (200 if result.get("ok") else 502)
     except ValueError as exc:
         return jsonify(ok=False, error=str(exc)), 400
 

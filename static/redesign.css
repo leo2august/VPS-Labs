@@ -38,7 +38,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.22;z-
 /* Main rhythm */
 html{scroll-behavior:auto}
 .main{padding:30px clamp(22px,3vw,46px) 52px;max-width:1800px;width:100%;margin:0 auto;align-self:start}
-.page{animation:pageIn .22s ease both}@keyframes pageIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.page{animation:pageIn .22s ease}@keyframes pageIn{from{opacity:0}to{opacity:1}}
 .top{position:relative;align-items:flex-start;margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--line);gap:22px}
 .top:after{content:"";position:absolute;left:0;bottom:-1px;width:64px;height:2px;background:linear-gradient(90deg,var(--vermilion),#f39a7d);border-radius:2px}
 .top h1{margin:3px 0 3px;font-size:clamp(25px,2.5vw,37px);line-height:1.15;letter-spacing:-.035em;color:var(--navy)}

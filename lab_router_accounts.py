@@ -52,6 +52,25 @@ def update_account(account_id, enabled):
     return {"ok": True, "connection": data.get("connection", data)}
 
 
+def update_provider_accounts(provider, enabled):
+    provider = str(provider or "").strip()
+    rows = _call("GET", "/api/providers", timeout=5).get("connections", [])
+    matches = [row for row in rows if str(row.get("provider", "")).lower() == provider.lower()]
+    if not provider or not matches:
+        raise ValueError("provider tidak ditemukan")
+    failed = []
+    updated = 0
+    for row in matches:
+        account_id = _id(row.get("id"))
+        try:
+            _call("PUT", f"/api/providers/{account_id}", {"isActive": bool(enabled)})
+            updated += 1
+        except ValueError as exc:
+            failed.append({"id": account_id, "error": str(exc)})
+    return {"ok": not failed, "provider": provider, "enabled": bool(enabled),
+            "updated": updated, "failed": failed}
+
+
 def test_account(account_id):
     data = _call("POST", f"/api/providers/{_id(account_id)}/test")
     return {"ok": True, "result": data}
