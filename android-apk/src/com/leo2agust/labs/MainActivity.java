@@ -42,7 +42,7 @@ public class MainActivity extends Activity {
     private LinearLayout bottomNav;
     private Map<String, Button> navButtons = new HashMap<>();
     private SharedPreferences prefs;
-    static final String LABS_URL = "https://labs.leo2agust.my.id";
+    static final String LABS_URL = "";
     static final String[][] NAV_ITEMS = {
         {"overview", "Overview", "🏠"},
         {"performance", "Perf", "📈"},
@@ -146,7 +146,12 @@ public class MainActivity extends Activity {
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
         } else {
-            webView.loadUrl(baseUrl);
+            String base = prefs.getString("labs_url", LABS_URL);
+            if (base == null || base.trim().isEmpty()) {
+                showSetupPrompt();
+            } else {
+                webView.loadUrl(base);
+            }
         }
 
         // Cek update dari GitHub Releases (setelah 3 detik, sekali saat app dibuka)
@@ -155,6 +160,28 @@ public class MainActivity extends Activity {
                 UpdateChecker.check(MainActivity.this, true, null);
             }
         }, 3000);
+    }
+
+    // Layar pertama kali: URL belum di-set → arahkan ke Settings
+    private void showSetupPrompt() {
+        android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(this);
+        b.setTitle("⚙️ Konfigurasi Server");
+        b.setMessage("URL server Labs belum diatur.\n\n" +
+                "Isi alamat server kamu (mis. https://labs.domain-kamu.com) di menu Settings (⚙️) terlebih dahulu.\n\n" +
+                "Belum punya server? Buka tab Installation (📲) untuk panduan deploy Labs ke VPS kamu.");
+        b.setPositiveButton("Buka Settings", new android.content.DialogInterface.OnClickListener() {
+            public void onClick(android.content.DialogInterface d, int w) {
+                Intent i = new Intent(MainActivity.this, SettingsActivity.class);
+                startActivityForResult(i, 100);
+            }
+        });
+        b.setNegativeButton("Panduan Instal", new android.content.DialogInterface.OnClickListener() {
+            public void onClick(android.content.DialogInterface d, int w) {
+                startActivity(new Intent(MainActivity.this, InstallationActivity.class));
+            }
+        });
+        b.setCancelable(false);
+        b.show();
     }
 
     private void requestStorageIfNeeded(final String url, final String ua, final String cd, final String mime, final String fileName) {
@@ -303,6 +330,10 @@ public class MainActivity extends Activity {
         if (requestCode == 100) {
             buildBottomNav();
             String baseUrl = prefs.getString("labs_url", LABS_URL);
+            if (baseUrl == null || baseUrl.trim().isEmpty()) {
+                showSetupPrompt();
+                return;
+            }
             String cur = webView.getUrl();
             if (cur == null || !cur.startsWith(baseUrl)) {
                 webView.loadUrl(baseUrl);

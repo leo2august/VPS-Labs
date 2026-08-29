@@ -1,26 +1,69 @@
-MIT License
+# VPS Sentinel Labs — License & Ownership
 
-Copyright (c) 2026 Leo2agust
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+**Copyright (c) 2026 Leo2agust. All rights reserved.**
 
 ---
-Note: The bundled `vps-audit.sh` is a community audit script by Israel Abebe
-Kokiso (MIT, original copyright retained in its header). All other files in
-this repository are (c) 2026 Leo2agust under the MIT License above.
+
+## 1. Kepemilikan (Ownership)
+
+Seluruh kode sumber, desain, aset visual, dokumentasi, dan template dalam
+repository ini ("**Labs**") adalah milik **Leo2agust** (pemilik asli / original
+author). Nama "Leo2agust", "Leo2agust Labs", seal 雲, dan branding terkait
+adalah tanda pengenal kepemilikan yang tidak dapat dialihkan.
+
+## 2. Yang DIPERBOLEHKAN (Lisensi Install Pribadi)
+
+Anda **diizinkan** untuk:
+
+- Mengunduh dan **meng-install Labs di server pribadi Anda sendiri** (VPS /
+  dedicated / home server) untuk keperluan pribadi atau internal tim Anda.
+- Menggunakan APK/Labs yang telah ter-install sesuai fungsinya.
+- Menyesuaikan *konfigurasi* (nama branding, port, password) melalui pengaturan
+  yang disediakan aplikasi — selama **kredit kepemilikan tetap milik Leo2agust**.
+
+## 3. Yang DILARANG (Tanpa izin tertulis dari Leo2agust)
+
+Dilarang keras:
+
+1. **Membuat fork / copy repository ini ke akun GitHub (atau platform Git lain)**
+   milik Anda atau pihak lain, baik utuh maupun sebagian, dengan maksud
+   menerbitkan ulang, mengklaim kepemilikan, atau mendistribusikan sebagai
+   proyek Anda sendiri.
+2. **Menerbitkan ulang / re-publish** kode ini (sebagian atau seluruhnya) ke
+   platform publik mana pun, termasuk namun tidak terbatas pada GitHub,
+   GitLab, Bitbucket, npm, PyPI, atau forum publik.
+3. **Menghapus, mengubah, atau menyembunyikan** notifikasi hak cipta, atribusi,
+   atau identitas pemilik asli dari file, UI, atau dokumentasi.
+4. **Menjual, menyewakan, atau mengomersialkan** Labs atau turunannya tanpa
+   izin tertulis eksplisit dari Leo2agust.
+5. **Menggunakan branding, logo, seal, atau nama "Leo2agust"** untuk produk,
+   layanan, atau proyek lain di luar konteks instalasi pribadi Labs.
+
+## 4. Konsekuensi
+
+Pelanggaran terhadap ketentuan di atas merupakan pelanggaran hak cipta dan
+dapat ditindak sesuai hukum yang berlaku (UU Hak Cipta Indonesia No. 28 Tahun
+2014 dan peraturan internasional terkait, termasuk DMCA).
+
+## 5. Disclaimer
+
+Labs disediakan "AS IS" tanpa jaminan apa pun, tersurat maupun tersirat.
+Pemilik asli tidak bertanggung jawab atas kerusakan atau kerugian yang timbul
+dari penggunaan perangkat lunak ini.
+
+---
+
+## English Summary
+
+**VPS Sentinel Labs — Copyright (c) 2026 Leo2agust. All rights reserved.**
+
+You may **install** Labs on your own private server for personal/internal use.
+You may **NOT** fork, copy, republish, redistribute, sell, or claim ownership
+of this repository or its assets (in whole or in part) without explicit
+written permission from the original author, **Leo2agust**. Attribution and
+copyright notices must remain intact. Violations are subject to copyright law
+(Indonesia Law No. 28/2014 and applicable international law, including DMCA).
+
+---
+
+*Contact/Perizinan: melalui akun GitHub resmi `leo2august`.*

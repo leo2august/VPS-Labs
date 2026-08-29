@@ -60,16 +60,16 @@ public class SettingsActivity extends Activity {
         // Section: Server URL
         root.addView(sectionLabel("SERVER LABS"));
         urlInput = new EditText(this);
-        urlInput.setText(prefs.getString("labs_url", MainActivity.LABS_URL));
+        urlInput.setText(prefs.getString("labs_url", ""));
         urlInput.setTextSize(14);
         urlInput.setSingleLine(true);
-        urlInput.setHint("https://labs.leo2agust.my.id");
+        urlInput.setHint("https://labs.domain-kamu.com");
         urlInput.setPadding(dp(12), dp(10), dp(12), dp(10));
         urlInput.setBackground(rounded(Color.parseColor("#ffffff"), Color.parseColor("#d8d2c5")));
         root.addView(urlInput);
 
         TextView urlHelp = new TextView(this);
-        urlHelp.setText("Pakai domain sendiri? Ganti URL di sini — app langsung menuju server kamu.");
+        urlHelp.setText("Wajib diisi — alamat server Labs kamu sendiri. Jangan pakai URL orang lain.");
         urlHelp.setTextSize(11);
         urlHelp.setTextColor(Color.parseColor("#8896a8"));
         urlHelp.setPadding(0, dp(6), 0, dp(16));
