@@ -13,6 +13,7 @@ from pathlib import Path
 BACKUPS = Path(__file__).resolve().parent / "backups"
 LIVE_DB = Path(os.environ.get("LABS_9ROUTER_DB", "/home/ubuntu/.9router/db/data.sqlite"))
 LIVE_API = "http://127.0.0.1:20128/api/providers"
+from lab_db import connect as _db_connect
 
 
 def _latest_backup():
@@ -22,7 +23,7 @@ def _latest_backup():
 
 def _usage(db):
     totals = defaultdict(lambda: {"requests": 0, "prompt": 0, "output": 0})
-    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    con = _db_connect("ro")
     con.row_factory = sqlite3.Row
     try:
         for r in con.execute("SELECT provider,connectionId,COUNT(*) requests,SUM(promptTokens) prompt,SUM(completionTokens) output FROM usageHistory GROUP BY provider,connectionId"):
@@ -78,7 +79,7 @@ def _db_read_accounts(db_path=LIVE_DB):
     if not db.exists():
         raise FileNotFoundError(str(db))
     totals = _usage(db)
-    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    con = _db_connect("ro")
     con.row_factory = sqlite3.Row
     try:
         rows = list(con.execute("SELECT id,provider,name,email,isActive,data FROM providerConnections ORDER BY provider,name"))

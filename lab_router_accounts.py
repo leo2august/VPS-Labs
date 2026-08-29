@@ -10,6 +10,8 @@ import urllib.request
 import uuid
 from pathlib import Path
 
+from lab_db import connect_read, connect_write
+
 BASE = "http://127.0.0.1:20128"
 LIVE_DB = Path(os.environ.get("LABS_9ROUTER_DB", "/home/ubuntu/.9router/db/data.sqlite"))
 DEVICE_PROVIDERS = {"kiro", "github", "qwen"}
@@ -69,12 +71,13 @@ def router_status():
 
 
 def _db_set_active(account_ids, enabled):
-    """Write isActive directly into the 9router SQLite DB (offline mode)."""
+    """Write isActive directly into the 9router SQLite DB (shared twin DB, WAL)."""
     if not LIVE_DB.exists():
         raise ValueError("database 9router tidak ditemukan untuk mode offline")
     ids = [_id(i) for i in account_ids]
-    con = sqlite3.connect(str(LIVE_DB))
+    con = connect_write()
     try:
+        con.execute("BEGIN IMMEDIATE")
         cur = con.cursor()
         for aid in ids:
             cur.execute("UPDATE providerConnections SET isActive=?, updatedAt=? WHERE id=?",
@@ -118,7 +121,7 @@ def update_provider_accounts(provider, enabled):
             raise ValueError("provider tidak ditemukan")
         if not LIVE_DB.exists():
             raise ValueError("database 9router tidak ditemukan untuk mode offline")
-        con = sqlite3.connect(str(LIVE_DB))
+        con = connect_read()
         try:
             rows = con.execute("SELECT id FROM providerConnections WHERE lower(provider)=?",
                                (provider.lower(),)).fetchall()
@@ -139,7 +142,7 @@ def _account_data(account_id):
     aid = str(account_id or "")
     if aid.startswith("cfg:"):
         return _config_account(aid[4:])
-    con = sqlite3.connect(f"file:{LIVE_DB}?mode=ro", uri=True)
+    con = connect_read()
     con.row_factory = sqlite3.Row
     try:
         row = con.execute("SELECT * FROM providerConnections WHERE id=?", (_id(account_id),)).fetchone()
@@ -350,8 +353,9 @@ def delete_account(account_id):
         aid = _id(account_id)
         if not LIVE_DB.exists():
             raise ValueError("database 9router tidak ditemukan untuk mode offline")
-        con = sqlite3.connect(str(LIVE_DB))
+        con = connect_write()
         try:
+            con.execute("BEGIN IMMEDIATE")
             con.execute("DELETE FROM providerConnections WHERE id=?", (aid,))
             con.commit()
         finally:
