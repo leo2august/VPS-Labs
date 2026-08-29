@@ -13,6 +13,8 @@ import android.webkit.DownloadListener;
 import android.widget.LinearLayout;
 import android.widget.Button;
 import android.graphics.Color;
+import android.graphics.PorterDuff;
+import android.graphics.drawable.Drawable;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.content.res.Configuration;
@@ -43,24 +45,24 @@ public class MainActivity extends Activity {
     private Map<String, Button> navButtons = new HashMap<>();
     private SharedPreferences prefs;
     static final String LABS_URL = "";
-    // page id, label, compact icon, default visible (maks. 5 + Settings)
+    // page id, label, drawable icon, default visible (maks. 5 + Settings)
     static final String[][] NAV_ITEMS = {
-        {"overview", "Overview", "OV", "1"},
-        {"performance", "Perf", "PF", "1"},
-        {"services", "Services", "SV", "1"},
-        {"chat", "Chat", "CH", "1"},
-        {"attachments", "Files", "FL", "1"},
-        {"activity", "Logs", "LG", "0"},
-        {"security", "Security", "SC", "0"},
-        {"storage", "Storage", "ST", "0"},
-        {"usage", "Usage", "US", "0"},
-        {"notifications", "Alerts", "NT", "0"},
-        {"router", "Router", "RT", "0"},
-        {"quota", "Quota", "QT", "0"},
-        {"backup", "Backup", "BK", "0"},
-        {"update", "Update", "UP", "0"},
-        {"sessions", "Sessions", "SS", "0"},
-        {"config", "Config", "CF", "0"}
+        {"overview", "Overview", "ic_nav_overview", "1"},
+        {"performance", "Perf", "ic_nav_performance", "1"},
+        {"services", "Services", "ic_nav_services", "1"},
+        {"chat", "Chat", "ic_nav_chat", "1"},
+        {"attachments", "Files", "ic_nav_files", "1"},
+        {"activity", "Logs", "ic_nav_logs", "0"},
+        {"security", "Security", "ic_nav_security", "0"},
+        {"storage", "Storage", "ic_nav_storage", "0"},
+        {"usage", "Usage", "ic_nav_performance", "0"},
+        {"notifications", "Alerts", "ic_nav_alerts", "0"},
+        {"router", "Router", "ic_nav_router", "0"},
+        {"quota", "Quota", "ic_nav_performance", "0"},
+        {"backup", "Backup", "ic_nav_backup", "0"},
+        {"update", "Update", "ic_nav_update", "0"},
+        {"sessions", "Sessions", "ic_nav_sessions", "0"},
+        {"config", "Config", "ic_nav_settings", "0"}
     };
     private static final int REQ_STORAGE = 2001;
     private boolean isLoginNav = false; // track nav state untuk cegah kedip
@@ -277,7 +279,7 @@ public class MainActivity extends Activity {
     private void buildLoginNav() {
         navButtons.clear();
         bottomNav.removeAllViews();
-        Button login = makeNavButton("__login", "Login", "🔐");
+        Button login = makeNavButton("__login", "Login", "ic_nav_login");
         login.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 String base = prefs.getString("labs_url", LABS_URL);
@@ -285,7 +287,7 @@ public class MainActivity extends Activity {
             }
         });
         bottomNav.addView(login);
-        Button inst = makeNavButton("__install", "Install", "📲");
+        Button inst = makeNavButton("__install", "Install", "ic_nav_install");
         inst.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 Intent i = new Intent(MainActivity.this, InstallationActivity.class);
@@ -293,7 +295,7 @@ public class MainActivity extends Activity {
             }
         });
         bottomNav.addView(inst);
-        Button gear = makeNavButton("__settings", "Set", "⚙️");
+        Button gear = makeNavButton("__settings", "Set", "ic_nav_settings");
         gear.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 Intent i = new Intent(MainActivity.this, SettingsActivity.class);
@@ -318,7 +320,7 @@ public class MainActivity extends Activity {
             navButtons.put(item[0], btn);
             bottomNav.addView(btn);
         }
-        Button gear = makeNavButton("__settings", "Set", "⚙️");
+        Button gear = makeNavButton("__settings", "Set", "ic_nav_settings");
         gear.setTextColor(Color.parseColor("#8896a8"));
         gear.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -330,19 +332,27 @@ public class MainActivity extends Activity {
         updateNavActive("overview");
     }
 
-    private Button makeNavButton(String page, String label, String icon) {
+    private Button makeNavButton(String page, String label, String iconName) {
         Button btn = new Button(this);
         btn.setLayoutParams(new LinearLayout.LayoutParams(
             0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         btn.setGravity(Gravity.CENTER);
         btn.setPadding(0, dpToPx(3), 0, dpToPx(3));
-        btn.setText(icon + "\n" + label);
+        btn.setText(label);
         btn.setTextSize(9);
         btn.setSingleLine(false);
         btn.setLines(2);
         btn.setAllCaps(false);
         btn.setBackgroundColor(Color.TRANSPARENT);
         btn.setTextColor(Color.parseColor("#8896a8"));
+        int iconId = getResources().getIdentifier(iconName, "drawable", getPackageName());
+        if (iconId != 0) {
+            Drawable icon = getResources().getDrawable(iconId).mutate();
+            icon.setBounds(0, 0, dpToPx(20), dpToPx(20));
+            icon.setColorFilter(Color.parseColor("#8896a8"), PorterDuff.Mode.SRC_IN);
+            btn.setCompoundDrawables(null, icon, null, null);
+            btn.setCompoundDrawablePadding(dpToPx(2));
+        }
         btn.setTag(page);
         if (!page.equals("__settings") && !page.equals("__login") && !page.equals("__install")) {
             final String p = page;
@@ -410,8 +420,12 @@ public class MainActivity extends Activity {
     private void updateNavActive(String page) {
         for (Map.Entry<String, Button> entry : navButtons.entrySet()) {
             boolean active = entry.getKey().equals(page);
-            entry.getValue().setTextColor(Color.parseColor(active ? "#dc6268" : "#8896a8"));
-            entry.getValue().setAlpha(active ? 1f : 0.55f);
+            int color = Color.parseColor(active ? "#ff7b82" : "#a9b6c8");
+            Button button = entry.getValue();
+            button.setTextColor(color);
+            Drawable[] icons = button.getCompoundDrawables();
+            if (icons[1] != null) icons[1].setColorFilter(color, PorterDuff.Mode.SRC_IN);
+            button.setAlpha(active ? 1f : 0.72f);
         }
     }
 
