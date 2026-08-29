@@ -24,7 +24,13 @@ DEFAULT_BASE_URLS = {
     "minimax": "https://api.minimax.chat/v1",
     "nvidia": "https://integrate.api.nvidia.com/v1",
     "github": "https://models.github.ai/api",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta",
+    "ollama": "http://localhost:11434/v1",
+    "anthropic": "https://api.anthropic.com/v1",
+    "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
 }
+# Config providers that route through 9router OAuth and have no public OpenAI-compatible endpoint.
+OAUTH_PROVIDERS = {"kiro", "codex", "antigravity", "cline", "gemini-cli", "kilocode", "commandcode", "opencode"}
 _flows = {}
 _lock = threading.Lock()
 
@@ -128,7 +134,11 @@ def update_provider_accounts(provider, enabled):
 
 
 def _account_data(account_id):
-    """Read a single provider connection from the DB + merge its data JSON."""
+    """Read a single provider connection from the DB + merge its data JSON.
+    Supports cfg: prefixed ids that read from Hermes config custom_providers."""
+    aid = str(account_id or "")
+    if aid.startswith("cfg:"):
+        return _config_account(aid[4:])
     con = sqlite3.connect(f"file:{LIVE_DB}?mode=ro", uri=True)
     con.row_factory = sqlite3.Row
     try:
@@ -142,8 +152,61 @@ def _account_data(account_id):
     return raw
 
 
+CONFIG_PATH = Path(os.environ.get("HERMES_HOME", "/home/ubuntu/.hermes")) / "config.yaml"
+
+
+def _config_providers():
+    """Custom providers from Hermes config.yaml that have a direct base_url (not via 9router)."""
+    out = []
+    try:
+        cfg = json.loads(_load_yaml_json(CONFIG_PATH))
+    except Exception:
+        return out
+    provs = cfg.get("custom_providers") or []
+    if isinstance(provs, dict):
+        provs = list(provs.values())
+    for p in provs:
+        name = (p.get("name") or "").strip()
+        base = (p.get("base_url") or "").strip()
+        if not name or not base:
+            continue
+        # skip providers that route through 9router (already represented in DB)
+        if "127.0.0.1" in base and "20128" in base:
+            continue
+        if "127.0.0.1" in base and "20129" in base:
+            continue
+        out.append({
+            "name": name,
+            "base_url": base.rstrip("/"),
+            "api_key": p.get("api_key") or "",
+            "model": p.get("model") or p.get("default_model") or "",
+            "models": p.get("models") or [],
+            "extra_headers": p.get("extra_headers") or {},
+        })
+    return out
+
+
+def _load_yaml_json(path):
+    """Parse a YAML file, return as JSON string (uses PyYAML if available)."""
+    import subprocess
+    r = subprocess.run(["python3", "-c",
+                        "import yaml,sys,json;print(json.dumps(yaml.safe_load(open(sys.argv[1]))))",
+                        str(path)], capture_output=True, text=True, timeout=10)
+    return r.stdout or "{}"
+
+
+def _config_account(name):
+    for p in _config_providers():
+        if p["name"] == name:
+            return p
+    raise ValueError("akun tidak ditemukan")
+
+
 def _base_url(raw):
     """Resolve the provider's OpenAI-compatible base URL."""
+    bu = raw.get("base_url") or ""
+    if bu:
+        return bu.rstrip("/")
     psd = raw.get("providerSpecificData") or {}
     bu = psd.get("baseUrl") or raw.get("baseUrl") or ""
     if bu:
@@ -164,12 +227,17 @@ def _base_url(raw):
 
 def _auth_token(raw):
     """Get the bearer token (apiKey or accessToken) for the account."""
-    return raw.get("apiKey") or raw.get("accessToken") or ""
+    return raw.get("apiKey") or raw.get("accessToken") or raw.get("api_key") or ""
+
+
+def _extra_headers(raw):
+    """Extra headers for relay providers (e.g. x-relay-target for B.AI)."""
+    return raw.get("extra_headers") or {}
 
 
 def _first_model(raw):
     """Pick the first locked model from data, or defaultModel, or a fallback."""
-    m = raw.get("defaultModel") or ""
+    m = raw.get("defaultModel") or raw.get("default_model") or raw.get("model") or ""
     if m:
         return m
     for k, v in raw.items():
@@ -203,12 +271,12 @@ def test_account(account_id):
         if not token:
             return {"ok": True, "result": {"valid": False, "error": "kredensial tidak tersedia"}}
         model = _first_model(raw) or "gpt-3.5-turbo"
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+        headers.update(_extra_headers(raw))
         import time
         t0 = time.time()
-        payload = json.dumps({"model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}).encode()
-        status, body = _offline_http("POST", f"{base}/chat/completions",
-                                     {"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
-                                     body=payload)
+        payload = json.dumps({"model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 16}).encode()
+        status, body = _offline_http("POST", f"{base}/chat/completions", headers, body=payload)
         ms = int((time.time() - t0) * 1000)
         if status == 200:
             return {"ok": True, "mode": "db", "result": {"valid": True, "latency_ms": ms}}
@@ -222,12 +290,19 @@ def account_models(account_id):
         return {"ok": True, "mode": "api", **data}
     except ValueError:
         raw = _account_data(account_id)
+        # For config providers, return their models list directly
+        if str(account_id or "").startswith("cfg:"):
+            models = raw.get("models") or []
+            if models:
+                return {"ok": True, "mode": "db", "models": models}
         # first try HTTP /models
         base = _base_url(raw)
         if base:
             token = _auth_token(raw)
             if token:
-                status, body = _offline_http("GET", f"{base}/models", {"Authorization": f"Bearer {token}"})
+                headers = {"Authorization": f"Bearer {token}"}
+                headers.update(_extra_headers(raw))
+                status, body = _offline_http("GET", f"{base}/models", headers)
                 if status == 200:
                     try:
                         models = [m.get("id") or m.get("name") for m in json.loads(body).get("data", []) if m.get("id") or m.get("name")]
@@ -247,6 +322,8 @@ def delete_account(account_id):
         _call("DELETE", f"/api/providers/{_id(account_id)}")
         return {"ok": True, "mode": "api"}
     except ValueError:
+        if str(account_id or "").startswith("cfg:"):
+            raise ValueError("hapus langsung dari config.yaml tidak didukung; nonaktifkan dari config")
         aid = _id(account_id)
         if not LIVE_DB.exists():
             raise ValueError("database 9router tidak ditemukan untuk mode offline")

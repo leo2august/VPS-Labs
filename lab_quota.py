@@ -99,6 +99,43 @@ def _db_status():
                    db_mode=True)
 
 
+def _config_provider_accounts():
+    """Custom providers from Hermes config.yaml surfaced as quota accounts."""
+    from lab_router_accounts import _config_providers
+    out = []
+    for p in _config_providers():
+        name = p["name"]
+        out.append({
+            "id": f"cfg:{name}", "provider": "config",
+            "name": name, "email": p["base_url"].replace("https://", "").split("/")[0],
+            "enabled": True, "status": "active", "error_code": None, "last_error": "",
+            "expires_at": None, "locked_models": len(p.get("models") or []),
+            "plan": "", "requests": 0, "tokens": 0, "prompt_tokens": 0, "output_tokens": 0,
+            "model": p.get("model") or "", "models": p.get("models") or [],
+            "config": True,
+        })
+    return out
+
+
+def quota_status():
+    try:
+        result = _live_status()
+    except Exception:
+        try:
+            result = _db_status()
+        except Exception:
+            try:
+                result = _backup_status()
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)[:240], "accounts": []}
+    # always append config providers so they show up regardless of 9router state
+    cfg = _config_provider_accounts()
+    if cfg:
+        result["accounts"] = result.get("accounts", []) + cfg
+        result["summary"]["total"] = len(result["accounts"])
+    return result
+
+
 def _backup_status():
     backup = _latest_backup()
     if not backup:
@@ -115,19 +152,6 @@ def _backup_status():
             raw = dict(row); raw.update(json.loads(raw.pop("data") or "{}"))
             accounts.append(_account(raw, totals[str(raw.get("id", ""))]))
     return _result(accounts, backup.name, backup.stat().st_mtime, False)
-
-
-def quota_status():
-    try:
-        return _live_status()
-    except Exception:
-        try:
-            return _db_status()
-        except Exception:
-            try:
-                return _backup_status()
-            except Exception as exc:
-                return {"ok": False, "error": str(exc)[:240], "accounts": []}
 
 
 if __name__ == "__main__":
