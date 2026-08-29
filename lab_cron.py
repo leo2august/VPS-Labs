@@ -7,10 +7,10 @@ import json, os, re, sqlite3, subprocess, time
 from pathlib import Path
 from datetime import datetime
 
-HERMES_CRON = Path(os.environ.get("LABS_HERMES_DIR", "/home/USER/.hermes")) / "cron"
+HERMES_CRON = Path(os.environ.get("HERMES_HOME", "/home/ubuntu/.hermes")) / "cron"
 JOBS_JSON = HERMES_CRON / "jobs.json"
 EXEC_DB = HERMES_CRON / "executions.db"
-PY = "/home/USER/.hermes/hermes-agent/venv/bin/python"
+PY = "/home/ubuntu/.hermes/hermes-agent/venv/bin/python"
 HERMES_CLI = [PY, "-m", "hermes_cli.main"]
 _SYSTEM_CACHE = {"at": 0.0, "crontab": [], "timers": []}
 
@@ -140,6 +140,7 @@ def list_jobs():
             "completed": (j.get("repeat") or {}).get("completed", 0),
             "history": exec_map.get(jid, []),
             "model": j.get("model"),
+            "provider": j.get("provider"),
             "enabled_toolsets": j.get("enabled_toolsets"),
             "workdir": j.get("workdir"),
             "context_from": j.get("context_from"),
@@ -256,3 +257,28 @@ def action(job_id, act):
     if not r["ok"]:
         return {"ok": False, "error": r["stderr"] or r["stdout"] or "gagal"}
     return {"ok": True, "action": act, "detail": r["stdout"][:200]}
+
+
+def update_job(job_id, model=None, provider=None):
+    """Set model/provider untuk satu agent job di jobs.json (langsung, aman)."""
+    job_id = (job_id or "").strip()
+    if not job_id:
+        raise ValueError("job id wajib diisi")
+    try:
+        data = json.loads(JOBS_JSON.read_text())
+    except Exception:
+        raise ValueError("jobs.json tidak terbaca")
+    jobs = data.get("jobs", [])
+    target = next((j for j in jobs if j.get("id") == job_id), None)
+    if not target:
+        raise ValueError("job tidak ditemukan")
+    if not target.get("no_agent"):
+        if model is not None:
+            target["model"] = (model or "").strip() or None
+        if provider is not None:
+            target["provider"] = (provider or "").strip() or None
+    else:
+        raise ValueError("job script tidak memakai model")
+    with open(JOBS_JSON, "w") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False)
+    return {"ok": True, "job_id": job_id, "model": target.get("model"), "provider": target.get("provider")}

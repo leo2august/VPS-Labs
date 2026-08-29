@@ -901,6 +901,21 @@ def api_lab_cron_job_action():
     return jsonify(r)
 
 
+@app.post("/api/lab/cron-jobs/model")
+@login_required
+def api_lab_cron_job_model():
+    b = request.get_json(force=True) or {}
+    job_id = (b.get("id") or "").strip()
+    model = b.get("model")
+    provider = b.get("provider")
+    if not job_id:
+        return jsonify(ok=False, error="id job wajib"), 400
+    try:
+        return jsonify(lab_cron.update_job(job_id, model=model, provider=provider))
+    except ValueError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+
+
 @app.post("/api/lab/failover")
 @login_required
 def api_lab_failover_toggle():
