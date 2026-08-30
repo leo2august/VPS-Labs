@@ -17,6 +17,7 @@ Clean, self-contained template: no personal data, no secrets, no branding of any
 - **Task manager** — start/stop/restart services with confirmation.
 - **Router / Provider & gateway** — live per-gateway runtime routes, change provider+model, custom provider CRUD (add/ping/edit/delete), model picker.
 - **Provider quota & accounts** — 9router account management, quotas, OAuth device-login wizard.
+- **9router twin** — Labs dapat berbagi DB yang sama dengan 9router, login OAuth via 9router on-demand (kiro/github/qwen/kilocode), import token, custom provider, proxy API, dan auto-off watchdog. Lihat [`MIGRATION-9ROUTER-LABS.md`](MIGRATION-9ROUTER-LABS.md) untuk panduan lengkap.
 - **Usage** — token usage per provider, PDF report.
 - **Chat / Skills / Memory / Sessions** — Hermes integration (optional; needs Hermes home).
 - **Settings (Control Center)** — theme/language/density, Hermes WebUI settings, VPS access (password/SSH key/mode), website status.
