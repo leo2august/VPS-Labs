@@ -423,9 +423,7 @@ def import_kiro_token(refresh_token, name="Kiro (import)"):
 FLOWS = {
     "kiro": (start_kiro_device, poll_kiro_token),
     "github": (start_github_device, poll_github_token),
-    "kiro_social": (start_kiro_social, poll_kiro_social),
-    "kiro-google": (lambda a="": start_kiro_social("google"), lambda f, code=None: poll_kiro_social(f, code=code)),
-    "kiro-github": (lambda a="": start_kiro_social("github"), lambda f, code=None: poll_kiro_social(f, code=code)),
+    "kiro_import": (lambda a="": {"ok": True, "note": "Gunakan menu Import Kiro"}, lambda f, code=None: {"ok": False, "error": "Gunakan menu Import Kiro"}),
 }
 
 

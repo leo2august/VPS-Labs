@@ -881,6 +881,56 @@ def api_lab_router_account_import_kiro():
         return jsonify(ok=False, error=str(exc)), 400
 
 
+# ---- 9router on-demand bridge (token-issuer) ----
+@app.post("/api/lab/9router/oauth/start")
+@login_required
+def api_lab_9router_oauth_start():
+    """Nyalakan 9router & minta device code untuk provider OAuth (kiro/github/qwen)."""
+    import lab_9router_bridge as bridge
+    b = request.get_json(force=True) or {}
+    provider = (b.get("provider") or "kiro").lower()
+    start = bridge.start_9router(timeout=30)
+    if not start.get("ok"):
+        return jsonify(ok=False, error=start.get("error", "9router gagal start")), 500
+    data = bridge.get_device_code(provider)
+    if not data.get("device_code"):
+        bridge.stop_9router()
+        return jsonify(ok=False, error="device code gagal: %s" % str(data)[:150]), 400
+    return jsonify(ok=True, provider=provider,
+                   verification_uri=data.get("verification_uri_complete") or data.get("verification_uri"),
+                   user_code=data.get("user_code"),
+                   device_code=data["device_code"],
+                   expires_in=data.get("expires_in", 600),
+                   note="Buka link di browser, login, lalu izinkan. 9router akan otomatis dimatikan setelah selesai.")
+
+
+@app.post("/api/lab/9router/oauth/poll")
+@login_required
+def api_lab_9router_oauth_poll():
+    """Poll hasil login; setelah sukses, matikan 9router."""
+    import lab_9router_bridge as bridge
+    b = request.get_json(force=True) or {}
+    provider = (b.get("provider") or "kiro").lower()
+    device_code = b.get("device_code") or ""
+    if not device_code:
+        return jsonify(ok=False, error="device_code wajib"), 400
+    r = bridge.poll_token(provider, device_code, timeout=60)
+    if r.get("ok"):
+        bridge.stop_9router()
+        return jsonify(ok=True, message="Login berhasil, token tersimpan.")
+    if r.get("pending"):
+        return jsonify(ok=True, pending=True, message="Menunggu login…")
+    bridge.stop_9router()
+    return jsonify(ok=False, error=r.get("error", "gagal")), 400
+
+
+@app.post("/api/lab/9router/oauth/stop")
+@login_required
+def api_lab_9router_oauth_stop():
+    import lab_9router_bridge as bridge
+    return jsonify(bridge.stop_9router())
+
+
 @app.get("/api/lab/failover")
 @login_required
 def api_lab_failover():
