@@ -66,7 +66,7 @@ def is_running():
 
 
 def start_9router(timeout=60):
-    """Nyalakan 9router headless di background. Langsung return, jangan blocking."""
+    """Nyalakan 9router. Jika sudah running (service/systemd), langsung OK."""
     global PROC
     if is_running():
         return {"ok": True, "note": "sudah berjalan"}
@@ -84,12 +84,18 @@ def start_9router(timeout=60):
         )
     except Exception as e:
         return {"ok": False, "error": str(e)}
-    return {"ok": True, "starting": True, "pid": PROC.pid,
-            "note": "9router dimulai di background (tunggu ~15-30 detik)"}
+    # tunggu API siap
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if is_running():
+            return {"ok": True, "pid": PROC.pid, "note": "9router aktif"}
+        time.sleep(1)
+    stop_9router()
+    return {"ok": False, "error": "9router tidak merespons setelah %ds" % timeout}
 
 
 def stop_9router():
-    """Matikan 9router (hemat RAM)."""
+    """Matikan 9router. No-op jika 9router adalah systemd service permanen."""
     global PROC
     if PROC:
         try:
@@ -100,7 +106,9 @@ def stop_9router():
             except Exception:
                 pass
         PROC = None
-    return {"ok": True}
+        return {"ok": True, "mode": "subprocess"}
+    # Jika tidak ada PROC, berarti 9router adalah service systemd — jangan matikan
+    return {"ok": True, "mode": "service", "note": "9router adalah service permanen, tidak dimatikan"}
 
 
 def list_oauth_providers():

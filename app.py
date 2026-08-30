@@ -885,20 +885,14 @@ def api_lab_router_account_import_kiro():
 @app.post("/api/lab/9router/oauth/start")
 @login_required
 def api_lab_9router_oauth_start():
-    """Nyalakan 9router (async, langsung return) — frontend polling status."""
+    """9router service selalu nyala — langsung minta device code."""
     import lab_9router_bridge as bridge
     b = request.get_json(force=True) or {}
     provider = (b.get("provider") or "kiro").lower()
-    start = bridge.start_9router()
-    if not start.get("ok"):
-        return jsonify(ok=False, error=start.get("error", "9router gagal start")), 500
-    if start.get("starting"):
-        return jsonify(ok=True, starting=True, provider=provider,
-                       message=start.get("note", "9router mulai, tunggu sebentar…"))
-    # sudah running → langsung minta device code
+    if not bridge.is_running():
+        bridge.start_9router(timeout=60)
     data = bridge.get_device_code(provider)
     if not data.get("device_code"):
-        bridge.stop_9router()
         return jsonify(ok=False, error="device code gagal: %s" % str(data)[:150]), 400
     return jsonify(ok=True, provider=provider,
                    verification_uri=data.get("verification_uri_complete") or data.get("verification_uri"),
@@ -908,23 +902,13 @@ def api_lab_9router_oauth_start():
                    extra_data=data.get("extraData") or data.get("extra_data") or {},
                    interval=data.get("interval") or 5,
                    expires_in=data.get("expires_in", 600),
-                   note="Buka link di browser, login, lalu izinkan. 9router akan otomatis dimatikan setelah selesai.")
-
-
-@app.get("/api/lab/9router/oauth/status")
-@login_required
-def api_lab_9router_oauth_status():
-    """Cek kesiapan 9router (dipanggil frontend saat waiting)."""
-    import lab_9router_bridge as bridge
-    if bridge.is_running():
-        return jsonify(ok=True, ready=True)
-    return jsonify(ok=True, ready=False)
+                   note="Buka link di browser, login, lalu izinkan. 9router service selalu nyala — akun otomatis tersimpan.")
 
 
 @app.post("/api/lab/9router/oauth/poll")
 @login_required
 def api_lab_9router_oauth_poll():
-    """Poll hasil login; setelah sukses, matikan 9router."""
+    """Poll hasil login ke 9router; jangan stop 9router (service permanen)."""
     import lab_9router_bridge as bridge
     b = request.get_json(force=True) or {}
     provider = (b.get("provider") or "kiro").lower()
@@ -936,11 +920,9 @@ def api_lab_9router_oauth_poll():
                           extra_data=b.get("extra_data") or {},
                           timeout=60)
     if r.get("ok"):
-        bridge.stop_9router()
-        return jsonify(ok=True, message="Login berhasil, token tersimpan.")
-    if r.get("pending"):
+        return jsonify(ok=True, message="Login berhasil, token tersimpan di 9router.")
+    if r.get("pending") or r.get("error") == "timeout menunggu login":
         return jsonify(ok=True, pending=True, message="Menunggu login…")
-    bridge.stop_9router()
     return jsonify(ok=False, error=r.get("error", "gagal")), 400
 
 
