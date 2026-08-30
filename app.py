@@ -885,13 +885,17 @@ def api_lab_router_account_import_kiro():
 @app.post("/api/lab/9router/oauth/start")
 @login_required
 def api_lab_9router_oauth_start():
-    """Nyalakan 9router & minta device code untuk provider OAuth (kiro/github/qwen)."""
+    """Nyalakan 9router (async, langsung return) — frontend polling status."""
     import lab_9router_bridge as bridge
     b = request.get_json(force=True) or {}
     provider = (b.get("provider") or "kiro").lower()
-    start = bridge.start_9router(timeout=30)
+    start = bridge.start_9router()
     if not start.get("ok"):
         return jsonify(ok=False, error=start.get("error", "9router gagal start")), 500
+    if start.get("starting"):
+        return jsonify(ok=True, starting=True, provider=provider,
+                       message=start.get("note", "9router mulai, tunggu sebentar…"))
+    # sudah running → langsung minta device code
     data = bridge.get_device_code(provider)
     if not data.get("device_code"):
         bridge.stop_9router()
@@ -905,6 +909,16 @@ def api_lab_9router_oauth_start():
                    interval=data.get("interval") or 5,
                    expires_in=data.get("expires_in", 600),
                    note="Buka link di browser, login, lalu izinkan. 9router akan otomatis dimatikan setelah selesai.")
+
+
+@app.get("/api/lab/9router/oauth/status")
+@login_required
+def api_lab_9router_oauth_status():
+    """Cek kesiapan 9router (dipanggil frontend saat waiting)."""
+    import lab_9router_bridge as bridge
+    if bridge.is_running():
+        return jsonify(ok=True, ready=True)
+    return jsonify(ok=True, ready=False)
 
 
 @app.post("/api/lab/9router/oauth/poll")

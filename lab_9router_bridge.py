@@ -60,12 +60,11 @@ def is_running():
     return "connections" in r
 
 
-def start_9router(timeout=30):
-    """Nyalakan 9router headless; return status."""
+def start_9router(timeout=60):
+    """Nyalakan 9router headless di background. Langsung return, jangan blocking."""
     global PROC
     if is_running():
         return {"ok": True, "note": "sudah berjalan"}
-    # cek binary
     for cand in ("/usr/bin/9router",):
         if os.path.exists(cand):
             cmd = [NODE, cand, "-p", "20128", "--no-browser", "--skip-update"]
@@ -80,14 +79,8 @@ def start_9router(timeout=30):
         )
     except Exception as e:
         return {"ok": False, "error": str(e)}
-    # tunggu API siap
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if is_running():
-            return {"ok": True, "pid": PROC.pid, "note": "9router aktif"}
-        time.sleep(1)
-    stop_9router()
-    return {"ok": False, "error": "9router tidak merespons setelah %ds" % timeout}
+    return {"ok": True, "starting": True, "pid": PROC.pid,
+            "note": "9router dimulai di background (tunggu ~15-30 detik)"}
 
 
 def stop_9router():
