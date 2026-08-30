@@ -55,9 +55,14 @@ def _req(method, path, payload=None, timeout=30):
 
 
 def is_running():
-    """Cek apakah 9router API merespons."""
-    r = _req("GET", "/api/providers", timeout=3)
-    return "connections" in r
+    """Cek apakah server 9router merespons di port 20128 (apa pun status API)."""
+    try:
+        import socket
+        s = socket.create_connection(("127.0.0.1", 20128), timeout=2)
+        s.close()
+        return True
+    except OSError:
+        return False
 
 
 def start_9router(timeout=60):
