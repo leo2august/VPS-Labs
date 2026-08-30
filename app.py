@@ -871,6 +871,16 @@ def api_lab_router_login_poll():
         return jsonify(ok=False, error=str(exc)), 400
 
 
+@app.post("/api/lab/router-account/import-kiro")
+@login_required
+def api_lab_router_account_import_kiro():
+    b = request.get_json(force=True) or {}
+    try:
+        return jsonify(lab_oauth.import_kiro_token(b.get("refresh_token"), b.get("name") or "Kiro (import)"))
+    except ValueError as exc:
+        return jsonify(ok=False, error=str(exc)), 400
+
+
 @app.get("/api/lab/failover")
 @login_required
 def api_lab_failover():
@@ -878,6 +888,40 @@ def api_lab_failover():
 
 
 # ---- Labs API Proxy (OpenAI-compatible, twin without 9router) ----
+@app.route("/oauth/kiro-callback")
+def api_oauth_kiro_callback():
+    """Callback target for kiro social login.
+
+    Setelah user login via Google/GitHub, browser diarahkan ke sini dengan
+    ?code=...&state=...  Halaman ini menampilkan code agar bisa disalin ke
+    kolom input di wizard Labs.
+    """
+    code = request.args.get("code", "")
+    state = request.args.get("state", "")
+    error = request.args.get("error", "")
+    if error:
+        html = f"<p style='color:#b53636'><b>Login gagal:</b> {esc_html(error)}</p>"
+    elif not code:
+        html = "<p>No code received from kiro. Tutup tab ini dan coba lagi.</p>"
+    else:
+        html = f"""
+        <div style="max-width:560px;margin:8vh auto;padding:28px;border:1px solid #d8e0ea;border-radius:16px;background:#fff;font-family:system-ui;box-shadow:0 12px 40px rgba(0,0,0,.08)">
+          <div style="font-size:12px;font-weight:800;letter-spacing:.06em;color:#b53636">KIRO SOCIAL LOGIN</div>
+          <h2 style="margin:6px 0 4px;color:#14213d">Login berhasil ✓</h2>
+          <p style="color:#51627a;font-size:14px;line-height:1.6">Code berhasil didapat. Salin kode di bawah lalu tempel di kolom input di Labs (wizard Tambah akun → Kiro via Google).</p>
+          <textarea id="kc" readonly style="width:100%;min-height:120px;font-family:ui-monospace,monospace;font-size:12px;padding:10px;border:1px solid #d8e0ea;border-radius:10px;background:#f7f9fb;box-sizing:border-box">{code}</textarea>
+          <button onclick="navigator.clipboard.writeText(document.getElementById('kc').value);this.textContent='✓ Tersalin'" style="margin-top:10px;width:100%;padding:12px;border:0;border-radius:10px;background:#213e70;color:#fff;font-size:14px;font-weight:700;cursor:pointer">Salin code</button>
+          <p style="color:#8795a5;font-size:11px;margin-top:12px">state: {esc_html(state)}</p>
+        </div>"""
+    return f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kiro callback</title></head>
+    <body style="background:#eef1f6;margin:0">{html}</body></html>"""
+
+
+def esc_html(s):
+    import html as _html
+    return _html.escape(str(s or ""))
+
+
 @app.route("/v1/chat/completions", methods=["POST"])
 @login_required
 def api_v1_chat_completions():

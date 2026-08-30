@@ -236,6 +236,8 @@ def poll_github_token(flow_id):
 # No AWS client registration needed — kiro's own OAuth proxy.
 # ---------------------------------------------------------------------------
 KIRO_SOCIAL_BASE = "https://prod.us-east-1.auth.desktop.kiro.dev"
+KIRO_LABS_HOST = "https://labs.leo2agust.my.id"
+# kiro server hanya menerima redirect_uri terdaftar (custom protocol kiro://).
 KIRO_REDIRECT = "kiro://kiro.kiroAgent/authenticate-success"
 
 
@@ -278,7 +280,10 @@ def kiro_exchange_social_code(code, code_verifier):
 
 
 def start_kiro_social(provider="google"):
-    """Mulai kiro social login — PKCE, return URL untuk dibuka di browser."""
+    """Mulai kiro social login — PKCE, return URL untuk dibuka di browser.
+    NOTE: redirect_uri = kiro:// (custom protocol). Browser tidak bisa buka
+    kiro:// setelah login — tab blank/hilang. Alternatif: import_kiro_token().
+    """
     import hashlib
     import base64
     code_verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b"=").decode()
@@ -325,6 +330,68 @@ def poll_kiro_social(flow_id, code=None):
         "refreshToken": tokens["refreshToken"][:12] + "...",
         "profileArn": tokens["profileArn"],
     }}
+
+
+def import_kiro_token(refresh_token, name="Kiro (import)"):
+    """Import kiro token langsung dari refreshToken (mirrors 9router validateImportToken).
+
+    Cocok untuk browser — user paste refreshToken dari Kiro IDE / AWS SSO cache.
+    Format: refreshToken harus diawali 'aorAAAAAG'.
+    Endpoint: POST /refreshToken dengan body {refreshToken: ...}.
+    """
+    if not refresh_token or not str(refresh_token).strip():
+        raise ValueError("refresh token wajib diisi")
+    token = str(refresh_token).strip()
+    if not token.startswith("aorAAAAAG"):
+        raise ValueError("format token tidak valid — harus diawali 'aorAAAAAG'")
+
+    # call kiro's refresh endpoint (same as 9router's refreshToken)
+    body = json.dumps({"refreshToken": token}).encode()
+    req = urllib.request.Request(
+        f"{KIRO_SOCIAL_BASE}/refreshToken", data=body,
+        headers={"Content-Type": "application/json"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as res:
+            d = json.loads(res.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        raise ValueError(f"kiro token import gagal: {exc.read()[:200]}")
+    access = d.get("accessToken") or d.get("access_token")
+    if not access:
+        raise ValueError(f"kiro import response tidak valid: {d}")
+
+    # create a provider connection in the shared DB (format 9router)
+    import uuid as _uuid
+    rid = _uuid.uuid4().hex
+    expires_in = d.get("expiresIn") or d.get("expires_in") or 3600
+    expires_at = datetime.fromtimestamp(time.time() + int(expires_in)).isoformat().replace("+00:00", "Z")
+    data = {
+        "accessToken": access,
+        "refreshToken": refresh_token,
+        "expiresAt": expires_at,
+        "expiresIn": int(expires_in),
+        "testStatus": "active",
+        "modelLock_claude-haiku-4.5": True,
+        "modelLock_claude-sonnet-4.5": True,
+        "providerSpecificData": {
+            "profileArn": d.get("profileArn") or d.get("profile_arn") or "",
+            "authMethod": "imported",
+        },
+    }
+    con = connect_write()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        con.execute(
+            "INSERT INTO providerConnections (id, provider, authType, name, email, priority, isActive, data, createdAt, updatedAt) "
+            "VALUES (?, 'kiro', 'oauth', ?, NULL, 999, 1, ?, ?, ?)",
+            (rid, name, json.dumps(data, ensure_ascii=False),
+             datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+             datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return {"ok": True, "id": rid, "name": name, "message": "Kiro token berhasil diimpor."}
 
 
 # ---------------------------------------------------------------------------
