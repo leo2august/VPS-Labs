@@ -27,16 +27,27 @@ PROC = None
 
 
 def _req(method, path, payload=None, timeout=30):
+    """Request ke 9router API dengan CLI token auth (mirror 9router CLI)."""
     body = json.dumps(payload).encode() if payload is not None else None
-    req = urllib.request.Request(BASE + path, data=body, method=method,
-                                 headers={"Content-Type": "application/json"})
+    headers = {"Content-Type": "application/json"}
+    # CLI token: sha256(machineId + "9r-cli-auth")[:16]
+    try:
+        mpath = Path("/home/ubuntu/.9router/machine-id")
+        if mpath.exists():
+            mid = mpath.read_text().strip()
+            import hashlib
+            cli_token = hashlib.sha256((mid + "9r-cli-auth").encode()).hexdigest()[:16]
+            headers["x-9r-cli-token"] = cli_token
+    except Exception:
+        pass
+    req = urllib.request.Request(BASE + path, data=body, method=method, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as res:
-            raw = res.read()
+            raw = res.read().decode("utf-8", "replace")
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
         try:
-            return json.loads(e.read())
+            return json.loads(e.read().decode("utf-8", "replace"))
         except Exception:
             return {"error": f"HTTP {e.code}"}
     except Exception as e:
@@ -107,12 +118,22 @@ def list_oauth_providers():
 
 
 def get_device_code(provider):
-    """Minta device code dari 9router. provider: kiro | github | qwen | ..."""
-    return _req("GET", f"/api/oauth/{provider}/device-code", timeout=15)
+    """Minta device code dari 9router. provider: kiro | github | qwen | ...
+    Sertakan codeVerifier & extraData (seluruh respon, tanpa self-ref) untuk poll."""
+    r = _req("GET", f"/api/oauth/{provider}/device-code", timeout=15)
+    if r.get("device_code"):
+        r["codeVerifier"] = r.get("codeVerifier") or r.get("code_verifier") or ""
+        # CLI 9router: extraData = deviceData.extraData || deviceData (seluruh respon)
+        extra = dict(r)  # shallow copy
+        extra.pop("extraData", None)
+        r["extraData"] = r.get("extraData") or extra
+        r["interval"] = r.get("interval") or 5
+    return r
 
 
 def poll_token(provider, device_code, code_verifier=None, extra_data=None, timeout=120):
-    """Polling hasil login dari 9router. Blocking sampai selesai/expired."""
+    """Polling hasil login dari 9router. Blocking sampai selesai/expired.
+    code_verifier & extra_data WAJIB diambil dari get_device_code()."""
     body = {"deviceCode": device_code}
     if code_verifier:
         body["codeVerifier"] = code_verifier

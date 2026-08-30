@@ -900,6 +900,9 @@ def api_lab_9router_oauth_start():
                    verification_uri=data.get("verification_uri_complete") or data.get("verification_uri"),
                    user_code=data.get("user_code"),
                    device_code=data["device_code"],
+                   code_verifier=data.get("codeVerifier") or data.get("code_verifier") or "",
+                   extra_data=data.get("extraData") or data.get("extra_data") or {},
+                   interval=data.get("interval") or 5,
                    expires_in=data.get("expires_in", 600),
                    note="Buka link di browser, login, lalu izinkan. 9router akan otomatis dimatikan setelah selesai.")
 
@@ -914,7 +917,10 @@ def api_lab_9router_oauth_poll():
     device_code = b.get("device_code") or ""
     if not device_code:
         return jsonify(ok=False, error="device_code wajib"), 400
-    r = bridge.poll_token(provider, device_code, timeout=60)
+    r = bridge.poll_token(provider, device_code,
+                          code_verifier=b.get("code_verifier") or "",
+                          extra_data=b.get("extra_data") or {},
+                          timeout=60)
     if r.get("ok"):
         bridge.stop_9router()
         return jsonify(ok=True, message="Login berhasil, token tersimpan.")
