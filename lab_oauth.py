@@ -312,13 +312,36 @@ def start_kiro_social(provider="google"):
 
 
 def poll_kiro_social(flow_id, code=None):
-    """Setelah user login, kiro redirect ke kiro:// dengan ?code=...  Masukkan code di sini."""
+    """Setelah user login, browser redirect ke kiro://...?code=XXX.
+
+    `code` bisa berupa:
+      - nilai code mentah (XxxYyy)
+      - URL lengkap kiro://...?code=XXX (user paste dari address bar)
+      - URL lengkap kiro://...?code=XXX&state=YYY (state dicocokkan utk ambil flow)
+    """
     flow = _flows.get(flow_id)
     if not flow:
         raise ValueError("flow tidak ditemukan")
     if not code:
         return {"ok": False, "pending": True,
-                "message": "Setelah login, kiro akan redirect ke kiro:// dengan parameter code. Salin code-nya."}
+                "message": "Setelah login, kiro redirect ke kiro:// dengan parameter code. Salin URL lengkap dari address bar, lalu tempel di sini."}
+    raw = str(code).strip()
+    # jika user paste URL lengkap, ekstrak parameter query
+    if "?" in raw and ("code=" in raw or "state=" in raw):
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(raw).query)
+        code_val = (qs.get("code") or [""])[0]
+        state_val = (qs.get("state") or [""])[0]
+        # jika ada state dan cocok dengan flow lain, gunakan flow itu
+        if state_val:
+            for fid, f in list(_flows.items()):
+                if f.get("state") == state_val and f.get("provider") == "kiro_social":
+                    flow = f
+                    flow_id = fid
+                    break
+        if not code_val:
+            return {"ok": False, "error": "URL tidak mengandung parameter code"}
+        code = code_val
     tokens = kiro_exchange_social_code(code, flow["code_verifier"])
     # store into a kiro account
     account_id = flow.get("account_id") or ""
