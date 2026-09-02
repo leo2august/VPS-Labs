@@ -10,11 +10,12 @@ import hmac, io, json, os, platform, re, smtplib, socket, sqlite3, subprocess, t
 from collections import deque
 from functools import wraps
 from pathlib import Path
-from flask import Flask, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, Response, jsonify, redirect, render_template, request, send_file, session, url_for
 import psutil
 
 import lab_integration
 import lab_features
+import lab_profiles
 import lab_admin
 import lab_chat
 import lab_snapshot
@@ -378,7 +379,8 @@ def reset_password(token):
                 subprocess.Popen(['systemctl', 'restart', 'vps-audit.service'])
                 return render_template("login.html", notice="Password berubah. Masuk memakai password baru.", brand_name=_lab_brand()[0], brand_sub=_lab_brand()[1])
             error = result.get('error')
-    return render_template("reset.html", token=token, error=error)
+    return render_template("reset.html", token=token, error=error,
+                           brand_name=_lab_brand()[0], brand_sub=_lab_brand()[1])
 
 
 @app.post("/logout")
@@ -391,7 +393,22 @@ def logout():
 @login_required
 def index():
     return render_template("index.html", host=socket.gethostname(), user=session.get("user", "operator"),
-                           brand_name=_lab_brand()[0])
+                           brand_name=_lab_brand()[0], brand_sub=_lab_brand()[1])
+
+
+@app.get("/manifest.webmanifest")
+def web_manifest():
+    """Manifest dinamis supaya app terpasang mengikuti branding deployment."""
+    brand_name, brand_sub = _lab_brand()
+    payload = {
+        "id": "/", "name": brand_name, "short_name": brand_name[:12],
+        "description": brand_sub, "start_url": "/", "scope": "/",
+        "display": "standalone", "background_color": "#f5f1e9",
+        "theme_color": "#17243d", "lang": "id",
+    }
+    response = Response(json.dumps(payload, ensure_ascii=False), mimetype="application/manifest+json")
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
 
 
 @app.get("/api/overview")
@@ -597,6 +614,84 @@ def api_router_default():
 def api_lab_skills():
     return jsonify(lab_features.list_skills())
 
+
+@app.get("/api/lab/profiles")
+@login_required
+def api_lab_profiles():
+    """Inventaris profile Hermes."""
+    return jsonify(lab_profiles.list_profiles())
+
+
+@app.get("/api/lab/profile/workspace")
+@login_required
+def api_lab_profile_workspace():
+    try:
+        return jsonify(lab_profiles.workspace(request.args.get("profile", "default")))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+
+
+@app.get("/api/lab/profile/document")
+@login_required
+def api_lab_profile_document():
+    try:
+        return jsonify(lab_profiles.get_document(request.args.get("profile", "default"),
+                                                  request.args.get("kind", ""),
+                                                  request.args.get("key", "")))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+
+
+@app.post("/api/lab/profile/document")
+@login_required
+def api_lab_profile_document_save():
+    body = request.get_json(force=True) or {}
+    try:
+        return jsonify(lab_profiles.save_document(body.get("profile", "default"),
+                                                   str(body.get("kind", "")),
+                                                   body.get("content", ""),
+                                                   str(body.get("key", ""))))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+
+
+@app.post("/api/lab/profile/document/delete")
+@login_required
+def api_lab_profile_document_delete():
+    body = request.get_json(force=True) or {}
+    try:
+        return jsonify(lab_profiles.delete_document(body.get("profile", "default"),
+                                                     str(body.get("kind", "")),
+                                                     str(body.get("key", ""))))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+
+
+@app.post("/api/lab/profile/delete")
+@login_required
+def api_lab_profile_delete():
+    body = request.get_json(force=True) or {}
+    try:
+        name = lab_profiles.normalize_name(body.get("profile", ""))
+        if name == "default":
+            raise ValueError("Profile Default tidak bisa dihapus")
+        if str(body.get("confirm", "")) != name:
+            raise ValueError("Konfirmasi nama profile tidak cocok")
+        lab_profiles.profile_home(name)
+        proc = subprocess.run(
+            ["sudo", "-u", "ubuntu", "env", "HOME=/home/ubuntu",
+             "/home/ubuntu/.local/bin/hermes", "profile", "delete", name, "--yes"],
+            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            timeout=45, check=False)
+        if proc.returncode or (lab_profiles.PROFILES_ROOT / name).exists():
+            return jsonify(ok=False, error=(proc.stdout.strip() or "Gagal menghapus profile")[-1200:]), 500
+        return jsonify(ok=True, profile=name)
+    except (ValueError, FileNotFoundError) as e:
+        return jsonify(ok=False, error=str(e)), 400
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return jsonify(ok=False, error=f"Gagal menghapus profile: {e}"), 500
+
+
 @app.get("/api/lab/skill")
 @login_required
 def api_lab_skill():
@@ -627,6 +722,20 @@ def api_lab_session():
     return jsonify(lab_operations.get_session(sid))
 
 
+@app.get("/api/lab/gateway-contexts")
+@login_required
+def api_lab_gateway_contexts():
+    return jsonify(lab_operations.gateway_contexts())
+
+
+@app.post("/api/lab/gateway-contexts/compress")
+@login_required
+def api_lab_gateway_compress():
+    body = request.get_json(silent=True) or {}
+    result = lab_operations.request_gateway_compress(body.get("session_key"))
+    return jsonify(result), (202 if result.get("ok") else 400)
+
+
 @app.get("/api/lab/chat/history")
 @login_required
 def api_lab_chat_history():
@@ -653,7 +762,11 @@ def api_lab_chat():
     model = str(body.get("model", ""))
     provider = str(body.get("provider", ""))
     max_tokens = int(body.get("max_tokens", 1200))
-    result = lab_features.chat(messages, model, provider, max_tokens)
+    try:
+        result = lab_features.chat(messages, model, provider, max_tokens,
+                                   str(body.get("profile", "default")))
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
     if result.get("ok") and messages:
         result["session_id"] = lab_operations.record_lab_exchange(
             str(body.get("session_id", "")), str(messages[-1].get("content", "")), result.get("reply", ""), model or provider)
@@ -672,7 +785,12 @@ def api_lab_agent():
     provider = str(body.get("provider", ""))
     history = body.get("history") or []
     session_id = str(body.get("session_id", ""))
-    job_id = lab_features.start_agent_job(prompt, model, provider, history, session_id)
+    profile = str(body.get("profile", "default"))
+    try:
+        lab_profiles.profile_home(profile)
+    except ValueError as e:
+        return jsonify(ok=False, error=str(e)), 400
+    job_id = lab_features.start_agent_job(prompt, model, provider, history, session_id, profile)
     if not job_id:
         return jsonify(ok=False, error="Gagal membuat job"), 500
     return jsonify(ok=True, job_id=job_id)
@@ -1389,4 +1507,3 @@ if __name__ == "__main__":
         pass
     # Default tetap privat. Set NUVULABS_HOST=0.0.0.0 hanya untuk akses IP yang dibatasi firewall/VPN.
     app.run(host=os.environ.get("NUVULABS_HOST", "127.0.0.1"), port=int(os.environ.get("NUVULABS_PORT", "9118")))
-

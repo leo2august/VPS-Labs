@@ -1,12 +1,11 @@
-"""Labs — SOUL editor, session continue, 9router detail."""
-import os
+"""Leo2agust Lab — SOUL editor, session continue, 9router detail."""
 import json
 import subprocess
 from pathlib import Path
 
 import urllib.request
 
-HERMES_DIR = Path(os.environ.get('LABS_HERMES_DIR', '/home/USER/.hermes'))
+HERMES_DIR = Path("/home/ubuntu/.hermes")
 SOUL_FILE = HERMES_DIR / "SOUL.md"
 WEBUI_SESSIONS_DIR = HERMES_DIR / "webui" / "sessions"
 
@@ -50,7 +49,7 @@ def continue_session(sid: str, message: str, model: str = "gatekey-unlimited-dee
     body = json.dumps({"model": model, "messages": msgs, "max_tokens": 1500, "stream": False}).encode()
     req = urllib.request.Request("https://ai.gatekey.cloud/v1/chat/completions", data=body, headers={
         "Content-Type": "application/json",
-        "Authorization": "Bearer " + os.environ.get("LABS_GATEKEY_KEY", "")})
+        "Authorization": "Bearer gk_live_bmw17Xl1SZkVCqp96Vinn6BnrOjOcz9CHxq50zejOmA"})
     try:
         with urllib.request.urlopen(req, timeout=240) as r:
             raw = r.read().decode("utf-8", "replace")
@@ -99,7 +98,7 @@ def router_status() -> dict:
             pass
     # limits from snapshot
     try:
-        snap = json.loads(Path(__file__).resolve().parent / "static" / "9router-snapshot.json".read_text())
+        snap = json.loads(Path("/home/ubuntu/vps-audit/static/9router-snapshot.json").read_text())
         limits = {"providers_total": snap.get("providers_total", 0),
                   "providers_active": snap.get("providers_active", 0),
                   "models_total": snap.get("models_total", 0)}

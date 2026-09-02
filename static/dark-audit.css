@@ -173,3 +173,16 @@ html[data-theme="dark"] #update :is(.update-meta .spec b,.update-health-main b,.
 html[data-theme="dark"] #update .update-flow i{background:#102139!important}
 html[data-theme="dark"] #update .update-flow .active i{background:var(--accent)!important;border-color:var(--accent)!important;color:#fff!important}
 html[data-theme="dark"] :is(.settings-tabs,.attach-toolbar){background:#0b1829!important;border-color:#344b68!important;box-shadow:0 12px 30px rgba(0,0,0,.38)!important}
+
+/* Gateway Contexts */
+.gw-contexts{display:grid;gap:12px}
+.gw-context-card{background:rgba(10,21,39,.75);border:1px solid rgba(148,163,184,.15);border-radius:14px;padding:16px 18px}
+.gwc-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.gwc-platform{font-weight:750;color:#e6f0fa;letter-spacing:.02em}
+.gwc-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.gwc-metrics>div{background:rgba(7,13,25,.55);border:1px solid rgba(148,163,184,.1);border-radius:10px;padding:9px 12px;text-align:center}
+.gwc-metrics small{display:block;color:#7d8fab;font-size:10px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px}
+.gwc-metrics b{color:#22d3ee;font:700 15px/1.2 ui-monospace,monospace;text-shadow:0 0 12px rgba(0,229,255,.15)}
+.gwc-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px}
+.gwc-foot small{color:#7d8fab;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
+@media(max-width:620px){.gwc-metrics{grid-template-columns:repeat(2,1fr)}}

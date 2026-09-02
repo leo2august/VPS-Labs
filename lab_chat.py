@@ -1,9 +1,42 @@
-"""VPS Sentinel Labs — model listing for chat."""
-import os, yaml
+"""Leo2agust Lab — model listing for chat."""
+import json, os, sqlite3, yaml
 from pathlib import Path
 
-HERMES_DIR = Path(os.environ.get("LABS_HERMES_DIR", "/home/USER/.hermes"))
+HERMES_DIR = Path("/home/ubuntu/.hermes")
 CONFIG = HERMES_DIR / "config.yaml"
+ROUTER_DB = Path("/home/ubuntu/.9router/db/data.sqlite")
+
+
+def _router_models():
+    """Model per akun 9router; ID koneksi ikut provider agar akun bisa dipilih."""
+    if not ROUTER_DB.exists():
+        return []
+    con = sqlite3.connect(ROUTER_DB)
+    con.row_factory = sqlite3.Row
+    try:
+        rows = con.execute(
+            "SELECT id,provider,name,data FROM providerConnections WHERE isActive=1 ORDER BY provider,priority,name"
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    finally:
+        con.close()
+    out = []
+    for row in rows:
+        try:
+            data = json.loads(row["data"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            data = {}
+        models = sorted(k[10:] for k, v in data.items() if k.startswith("modelLock_") and v)
+        # Kiro reset kadang mengosongkan semua modelLock; akun tetap valid untuk model utama.
+        if not models and row["provider"] == "kiro":
+            models = ["kr/claude-sonnet-4.5"]
+        for model in models:
+            if "/" not in model:
+                model = f'{row["provider"]}/{model}'
+            out.append({"id": model, "label": model,
+                        "provider": f'{row["name"] or row["provider"]}@@{row["id"]}'})
+    return out
 
 GATEKEY_MODELS = [
     {"id": "gatekey-unlimited-deepseek-v4-flash", "label": "GateKey DeepSeek V4 Flash", "provider": "gatekey"},
@@ -28,48 +61,49 @@ def _provider_model_list(p):
     return out
 
 
-def _resolve_provider(data, model):
-    """Temukan provider (custom_providers) yang menyediakan model tsb."""
-    for p in data.get("custom_providers", []) or []:
-        if not isinstance(p, dict):
-            continue
-        pname = p.get("name", "?")
-        base = p.get("base_url") or ""
-        if not base:
-            continue
-        for m in _provider_model_list(p):
-            # cocok model langsung, atau model ber-prefix "provider/model"
-            if m == model or (isinstance(m, str) and m.endswith("/" + model)):
-                return {"provider": pname, "base_url": base, "api_key": p.get("api_key", ""),
-                        "model": m, "label": m}
-    return None
+def _provider_label(p):
+    """Label ringkas untuk dropdown: nama provider + akun bila ada."""
+    name = str(p.get("name", "?"))
+    return name
 
 
 def list_available_models() -> dict:
-    """Semua model yang bisa dipakai chat: GateKey + model dari config provider."""
-    seen = set()
-    out = list(GATEKEY_MODELS)
+    """Semua model yang bisa dipakai chat.
+
+    Sinkron 1:1 dengan config.yaml:
+    - Setiap provider (termasuk relay/akun ganda) tampil dengan modelnya sendiri.
+    - Dedup per (provider, model) — B.AI, B.AI Relay 2, B.AI Relay 3 masing-masing
+      muncul dengan modelnya, tidak saling menimpa.
+    """
+    out = _router_models()
+    seen = {f"{m['provider']}|{m['id']}" for m in out}  # key: provider|model
     for m in GATEKEY_MODELS:
-        seen.add(m["id"])
+        key = f"gatekey|{m['id']}"
+        if key not in seen:
+            seen.add(key)
+            out.append(m)
     try:
         data = yaml.safe_load(CONFIG.read_text()) or {}
     except Exception:
         return {"models": out}
     default_model = (data.get("model") or {}).get("default", "")
-    if default_model and default_model not in seen:
-        seen.add(default_model)
-        r = _resolve_provider(data, default_model)
-        if r:
-            out.append({"id": default_model, "label": r["label"], "provider": r["provider"]})
-        else:
-            out.append({"id": default_model, "label": default_model + " (default config)", "provider": "config"})
     for p in data.get("custom_providers", []) or []:
         if not isinstance(p, dict):
             continue
-        pname = p.get("name", "?")
+        pname = _provider_label(p)
         for m in _provider_model_list(p):
-            if not m or m in seen:
+            if not m:
                 continue
-            seen.add(m)
+            key = f"{pname}|{m}"
+            if key in seen:
+                continue
+            seen.add(key)
             out.append({"id": m, "label": m, "provider": pname})
+    # default model (config) — pastikan selalu ada di daftar
+    if default_model and not any(x["id"] == default_model for x in out):
+        out.append({"id": default_model, "label": default_model + " (default)", "provider": "config"})
+    # urut: GateKey dulu, lalu alfabetis per provider
+    def sort_key(x):
+        return (0 if x["provider"] == "gatekey" else 1, x["provider"].lower(), x["id"].lower())
+    out.sort(key=sort_key)
     return {"models": out}

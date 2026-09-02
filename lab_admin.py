@@ -10,15 +10,15 @@ from pathlib import Path
 
 import yaml
 
-HERMES_DIR = Path("/home/USER/.hermes")
+HERMES_DIR = Path("/home/ubuntu/.hermes")
 CONFIG = HERMES_DIR / "config.yaml"
 WEBUI_SESSIONS_DIR = HERMES_DIR / "webui" / "sessions"
-ROUTER_DB = Path("/home/USER/.9router/db/data.sqlite")
+ROUTER_DB = Path("/home/ubuntu/.9router/db/data.sqlite")
 STATE_DB = HERMES_DIR / "state.db"
 
 GATEWAY_UNITS = [
     ("hermes-gateway.service", "Hermes Gateway (messaging)"),
-    ("hermes-ta\1***", "Ta\1*** model router"),
+    ("hermes-task-router.service", "Task-aware model router"),
 ]
 
 _GENERIC_PROVIDERS = {"custom", "openai", "openrouter", "anthropic", "gemini", "auto"}
@@ -47,18 +47,96 @@ def _provider_index() -> dict:
     return index
 
 
-def _resolve_provider(model: str, runtime_provider: str, billing_provider: str, configured_provider: str = "") -> str:
-    """Effective provider for a session route, newest evidence first."""
+def _provider_by_base_url(base_url: str) -> str:
+    """Cari nama provider dari config yang base_url/relay-nya cocok dgn base_url runtime."""
+    if not base_url:
+        return ""
+    b = str(base_url).rstrip("/").lower()
+    try:
+        data = yaml.safe_load(CONFIG.read_text()) or {}
+        for p in data.get("custom_providers", []) or []:
+            if not isinstance(p, dict) or not p.get("name"):
+                continue
+            candidates = [p.get("base_url")] + (p.get("relays") or [])
+            for c in candidates:
+                if c and str(c).rstrip("/").lower() == b:
+                    return str(p["name"])
+    except (OSError, yaml.YAMLError, TypeError, ValueError):
+        pass
+    return ""
+
+
+def _find_active_runtime() -> str:
+    """Cari runtime_provider konkret dari sesi gateway aktif (dalam 5 menit).
+
+    Prioritas: provider non-generik dari gateway_runtime, lalu cocokkan base_url
+    ke custom_providers (relay Vercel milik provider tertentu).
+    """
+    try:
+        with sqlite3.connect(f"file:{STATE_DB}?mode=ro", uri=True, timeout=4) as db:
+            db.row_factory = sqlite3.Row
+            rows = db.execute("""
+                SELECT s.model_config
+                FROM sessions s
+                LEFT JOIN messages m ON m.session_id = s.id
+                WHERE s.ended_at IS NULL
+                  AND s.source IN ('telegram', 'whatsapp', 'web', 'webui', 'labs')
+                GROUP BY s.id
+                HAVING COALESCE(MAX(m.timestamp), s.started_at) > ?
+                ORDER BY MAX(m.timestamp) DESC
+                LIMIT 6
+            """, (time.time() - 300,)).fetchall()
+            for r in rows:
+                cfg = json.loads(r["model_config"] or "{}")
+                rt = (cfg.get("gateway_runtime") or {}) if isinstance(cfg, dict) else {}
+                rt = rt if isinstance(rt, dict) else {}
+                prov = str(rt.get("provider") or "") if rt else ""
+                if prov and prov not in _GENERIC_PROVIDERS:
+                    return prov
+            # 2nd pass: match by base_url (relay B.AI / Zen / dst)
+            for r in rows:
+                cfg = json.loads(r["model_config"] or "{}")
+                rt = (cfg.get("gateway_runtime") or {}) if isinstance(cfg, dict) else {}
+                rt = rt if isinstance(rt, dict) else {}
+                b = str(rt.get("base_url") or "") if rt else ""
+                if b:
+                    name = _provider_by_base_url(b)
+                    if name:
+                        return name
+    except (OSError, sqlite3.Error, ValueError, TypeError):
+        pass
+    return ""
+
+
+def _resolve_provider(model: str, runtime_provider: str, billing_provider: str, configured_provider: str = "", base_url: str = "") -> str:
+    """Effective provider for a session route, newest evidence first.
+
+    Prioritas: base_url sesi (relay → provider di config) > runtime_provider
+    spesifik > billing_provider spesifik > runtime sesi lain > config model.
+    """
+    # 1. base_url sesi itu sendiri — paling akurat (relay B.AI/Zen/relay milik provider X)
+    if base_url:
+        by_url = _provider_by_base_url(base_url)
+        if by_url:
+            return by_url
+    # 2. runtime_provider spesifik (bukan generic)
     if runtime_provider and str(runtime_provider) not in _GENERIC_PROVIDERS:
         return str(runtime_provider)
+    # 3. billing_provider spesifik
     if billing_provider and str(billing_provider) not in _GENERIC_PROVIDERS:
         return str(billing_provider)
+    # 4. Cari di sesi gateway lain yang aktif (mungkin ada runtime_provider nyata)
+    runtime_provider = _find_active_runtime()
+    if runtime_provider:
+        return runtime_provider
+    # 5. Fallback: config model→provider mapping (bisa kurang akurat)
     idx = _provider_index()
     if model and model in idx:
         return idx[model]
     if configured_provider:
         return str(configured_provider)
     return runtime_provider or billing_provider or "—"
+
 
 # ---- Config ----
 def _current_runtime_model() -> dict | None:
@@ -88,7 +166,7 @@ def _current_runtime_model() -> dict | None:
         billing_provider = row["billing_provider"] or ""
         return {
             "model": model,
-            "provider": _resolve_provider(model, runtime_provider, billing_provider),
+            "provider": _resolve_provider(model, runtime_provider, billing_provider, base_url=runtime.get("base_url") or row["billing_base_url"] or ""),
             "provider_raw": runtime_provider or billing_provider or "—",
             "base_url": runtime.get("base_url") or row["billing_base_url"] or "",
             "source": row["source"],
@@ -148,7 +226,7 @@ def gateway_routes() -> dict:
                 "source": source, "label": {"telegram":"Telegram","whatsapp":"WhatsApp","labs":"Labs Web"}.get(source, source.title()),
                 "session_id": row["id"], "display_name": row["display_name"] or "Sesi gateway",
                 "model": model,
-                "provider": _resolve_provider(model, runtime_provider, billing_provider, configured_provider),
+                "provider": _resolve_provider(model, runtime_provider, billing_provider, configured_provider, base_url=runtime.get("base_url") or row["billing_base_url"] or ""),
                 "provider_raw": runtime_provider or billing_provider or "—",
                 "base_url": runtime.get("base_url") or row["billing_base_url"] or "",
                 "last_active": row["last_active"], "online": bool(row["last_active"] and now-float(row["last_active"]) < 180),
@@ -202,16 +280,29 @@ def update_gateway_route(source: str, provider: str, model: str) -> dict:
             model = allowed[0]
         route_provider = "custom:" + canonical
         data.setdefault("platforms", {}).setdefault(source, {})
-        data["platforms"][source]["provider"] = route_provider
+        platform = data["platforms"][source]
+        platform["provider"] = route_provider
         if model:
-            data["platforms"][source]["model"] = model
+            platform["model"] = model
+        # Gateway route means every channel on that gateway. Existing per-channel
+        # overrides otherwise win and make a successful save appear ineffective.
+        if source == "whatsapp" and isinstance(platform.get("channel_overrides"), dict):
+            for override in platform["channel_overrides"].values():
+                if isinstance(override, dict):
+                    override["provider"] = route_provider
+                    if model:
+                        override["model"] = model
+        attr = subprocess.run(["lsattr", str(CONFIG)], capture_output=True, text=True, timeout=5)
+        was_immutable = bool(attr.stdout and "i" in attr.stdout.split()[0])
         subprocess.run(["chattr", "-i", str(CONFIG)], capture_output=True, timeout=5)
         try:
             tmp = CONFIG.with_suffix(".yaml.tmp")
             tmp.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False))
             os.replace(tmp, CONFIG)
         finally:
-            subprocess.run(["chattr", "+i", str(CONFIG)], capture_output=True, timeout=5)
+            # Preserve existing policy. Labs must not silently re-lock an editable config.
+            if was_immutable:
+                subprocess.run(["chattr", "+i", str(CONFIG)], capture_output=True, timeout=5)
         check = yaml.safe_load(CONFIG.read_text()) or {}
         if not isinstance(check, dict):
             raise ValueError("hasil config bukan object")
@@ -234,23 +325,16 @@ def _restart_gateway_async(source):
     - source == 'whatsapp' → restart bridge WhatsApp (child process). Telegram TIDAK ikut
       terganggu; gateway mem-bridge ulang bridge.js otomatis.
     - source == 'telegram' (atau lainnya) → restart gateway penuh (satu process utk Telegram)."""
-    if source == "whatsapp":
-        # Bridge WhatsApp = child node (bridge.js). Kill → gateway auto-respawn dalam 3-15 dtk.
-        cmd = ["sudo", "pkill", "-f", "whatsapp-bridge/bridge.js"]
-        try:
-            subprocess.run(cmd, capture_output=True, text=True, timeout=20, check=False)
-            # Tunggu singkat agar respawn tidak bentrok
-            time.sleep(2)
-            return
-        except Exception:
-            pass
+    # WhatsApp bridge is a child process without an independent supervisor.
+    # Killing bridge.js leaves gateway in `retrying`; restart gateway for every route change.
     cmd = ["sudo", "su", "-", "ubuntu", "-c",
            "XDG_RUNTIME_DIR=/run/user/1000 systemctl --user restart hermes-gateway.service"]
     try:
-        subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
-    except Exception:
-        # restart gagal/timeout: config sudah tersimpan, hanya perlu user restart manual
-        pass
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=False)
+        if result.returncode:
+            raise RuntimeError((result.stderr or result.stdout or "restart gagal")[:200])
+    except Exception as exc:
+        print(f"Gateway restart gagal setelah ganti rute {source}: {exc}", flush=True)
 
 
 def config_summary() -> dict:
@@ -296,7 +380,7 @@ def config_summary() -> dict:
 
 GATEWAY_UNITS = [
     ("hermes-gateway.service", "Hermes Gateway (messaging)", ["hermes", "gateway"]),
-    ("hermes-ta\1***", "Ta\1*** model router", ["ta\1***", "router.py"]),
+    ("hermes-task-router.service", "Task-aware model router", ["task-router", "router.py"]),
 ]
 
 
@@ -373,12 +457,13 @@ def gateway_action(unit: str, action: str) -> dict:
     if action not in ("restart", "stop", "start"):
         return {"ok": False, "error": "action tidak valid"}
     try:
-        r = subprocess.run(["systemctl", "--user", action, unit],
-                           capture_output=True, text=True, timeout=30)
-        # wait a beat for state settle
+        shell = f"XDG_RUNTIME_DIR=/run/user/1000 systemctl --user {action} {unit}"
+        r = subprocess.run(["sudo", "su", "-", "ubuntu", "-c", shell],
+                           capture_output=True, text=True, timeout=120)
         time.sleep(2)
-        st = subprocess.run(["systemctl", "--user", "is-active", unit],
-                            capture_output=True, text=True, timeout=10).stdout.strip()
+        check = f"XDG_RUNTIME_DIR=/run/user/1000 systemctl --user is-active {unit}"
+        st = subprocess.run(["sudo", "su", "-", "ubuntu", "-c", check],
+                            capture_output=True, text=True, timeout=15).stdout.strip()
         return {"ok": r.returncode == 0, "unit": unit, "action": action,
                 "state_after": st, "message": (r.stderr or r.stdout).strip()[:200]}
     except Exception as e:
@@ -588,4 +673,3 @@ def usage_report_pdf(data):
     d = ImageDraw.Draw(pages[-1]); d.text((margin, H-108), "Catatan: ledger Hermes dan 9router ditampilkan terpisah untuk mencegah hitung ganda.", fill=muted, font=font(16))
     out = BytesIO(); pages[0].save(out, format="PDF", save_all=True, append_images=pages[1:], resolution=150.0)
     return out.getvalue()
-

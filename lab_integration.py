@@ -1,4 +1,4 @@
-"""Labs — router & webui integration endpoints (read + safe actions)."""
+"""Leo2agust Lab — router & webui integration endpoints (read + safe actions)."""
 import ast
 import json
 import os
@@ -10,9 +10,9 @@ from pathlib import Path
 
 from flask import jsonify
 
-ROOT = Path(__file__).resolve().parent
-HERMES_HOME = Path(os.environ.get('LABS_HERMES_DIR', '/home/USER/.hermes'))
-ROUTER_PY = Path(os.environ.get('LABS_TASK_ROUTER_PY', '/home/USER/task-router/router.py'))
+ROOT = Path("/home/ubuntu/vps-audit")
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", "/home/ubuntu/.hermes"))
+ROUTER_PY = Path("/home/ubuntu/task-router/router.py")
 HERMES_CONFIG = HERMES_HOME / "config.yaml"
 WEBUI_SETTINGS = HERMES_HOME / "webui" / "settings.json"
 WEBUI_SETTINGS_BAK = ROOT / "settings.backup.json"
@@ -286,8 +286,10 @@ def update_default_model(model: str, provider: str = "") -> dict:
         os.replace(tmp, HERMES_CONFIG)
     finally:
         _attr("+i")
-    # restart task-router so it reloads
+    # restart task-router (unit asli: hermes-task-router.service, user ubuntu)
+    # supaya config baru dipakai. Labs jalan sebagai root → sudo su - ubuntu + XDG_RUNTIME_DIR.
     import subprocess
-    r = subprocess.run(["systemctl", "--user", "restart", "task-router.service"], capture_output=True, text=True, timeout=15)
+    r = subprocess.run(["sudo", "su", "-", "ubuntu", "-c",
+                        "XDG_RUNTIME_DIR=/run/user/1000 systemctl --user restart hermes-task-router.service"],
+                       capture_output=True, text=True, timeout=30)
     return {"ok": True, "model": model, "provider": provider, "router_restart": r.returncode == 0, "message": (r.stderr or r.stdout).strip()[:200]}
-

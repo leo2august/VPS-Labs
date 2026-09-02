@@ -2,25 +2,25 @@
 import hashlib, json, os, shutil, sqlite3, subprocess, tempfile, time, zipfile
 from pathlib import Path, PurePosixPath
 
-ROOT = Path(__file__).resolve().parent / 'backups'
+ROOT = Path('/home/ubuntu/vps-audit/backups')
 IMPORTS = ROOT / 'imports'
-ROUTER = Path(os.environ.get('LABS_9ROUTER_DB', '/home/USER/.9router/db/data.sqlite')).parent
-WEBUI = Path(os.environ.get('LABS_HERMES_DIR', '/home/USER/.hermes')) / 'webui'
-LABS = Path(__file__).resolve().parent
-LAB_FILES = [
-    'app.py', 'lab_account.py', 'lab_admin.py', 'lab_backup.py', 'lab_chat.py',
-    'lab_crud.py', 'lab_features.py', 'lab_integration.py', 'lab_operations.py',
-    'lab_provider.py', 'lab_quota.py', 'lab_router_accounts.py', 'lab_security.py',
-    'lab_snapshot.py', 'lab_webui.py', 'templates/index.html', 'templates/login.html', 'templates/reset.html',
-    'static/redesign.css', 'static/dark-audit.css', 'data/lab-settings.json', 'data/lab-account.json',
-    'data/notifications.db'
-]
+ROUTER = Path('/home/ubuntu/.9router')
+HERMES = Path('/home/ubuntu/.hermes')
+LABS = Path('/home/ubuntu/vps-audit')
+EXCLUDES = {
+    '9router': {'bin', 'runtime', 'logs', 'test-write'},
+    # WebUI backup is the complete Hermes data/profile backup. Exclude only
+    # installed code and regenerable runtime/cache trees.
+    'webui': {'hermes-agent', 'bin', 'cache', 'logs', 'lsp', 'audio_cache',
+              'image_cache', 'backups'},
+    'labs': {'.git', '__pycache__', 'backups'},
+}
 TARGETS = {
     '9router': {'root': ROUTER, 'required': {'db/data.sqlite'}, 'service': '9router.service'},
-    'webui': {'root': WEBUI, 'required': {'settings.json'}, 'service': 'hermes-webui.service'},
+    'webui': {'root': HERMES, 'required': {'webui/settings.json', 'config.yaml', 'state.db'}, 'service': 'hermes-webui.service'},
     'labs': {'root': LABS, 'required': {'app.py', 'templates/index.html', 'static/redesign.css'}, 'service': 'vps-audit.service'},
 }
-MAX_UPLOAD = 200 * 1024 * 1024
+MAX_UPLOAD = 5 * 1024 * 1024 * 1024
 
 
 def _run(*args):
@@ -52,7 +52,7 @@ def _manifest(z):
         m = json.loads(raw)
     except (KeyError, json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError('manifest.json tidak valid') from e
-    if m.get('format') != 'labs-template-backup-v1' or m.get('target') not in TARGETS:
+    if m.get('format') != 'leo2agust-lab-backup-v1' or m.get('target') not in TARGETS:
         raise ValueError('jenis backup tidak dikenali')
     return m
 
@@ -68,6 +68,7 @@ def create_backup(target):
     with tempfile.TemporaryDirectory(dir=ROOT) as td:
         stage = Path(td)
         db = stage / 'db/data.sqlite'
+        hermes_db = stage / 'state.db'
         if target == '9router':
             db.parent.mkdir(parents=True)
             src = sqlite3.connect(f'file:{ROUTER / "db/data.sqlite"}?mode=ro', uri=True)
@@ -79,17 +80,31 @@ def create_backup(target):
                 dst.commit()
             finally:
                 dst.close(); src.close()
-            candidates = ['jwt-secret', 'machine-id', 'auth', 'mitm/aliases.json']
-        elif target == 'webui':
-            candidates = [p.name for p in WEBUI.iterdir()] if WEBUI.exists() else []
+            candidates = [p.name for p in ROUTER.iterdir()
+                          if p.name not in EXCLUDES['9router'] and p.name != 'db']
+            candidates.append('db')
         else:
-            candidates = LAB_FILES
+            source_root = TARGETS[target]['root']
+            candidates = [p.name for p in source_root.iterdir()
+                          if p.name not in EXCLUDES[target]] if source_root.exists() else []
+            if target == 'webui':
+                # Snapshot live SQLite atomically; never archive a mismatched DB/WAL pair.
+                src = sqlite3.connect(f'file:{source_root / "state.db"}?mode=ro', uri=True)
+                dst = sqlite3.connect(hermes_db)
+                try:
+                    src.backup(dst)
+                finally:
+                    dst.close(); src.close()
         with zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED, compresslevel=6, allowZip64=True) as z:
             if target == '9router':
                 z.write(db, 'db/data.sqlite'); files.append('db/data.sqlite')
+            elif target == 'webui':
+                z.write(hermes_db, 'state.db'); files.append('state.db')
             for rel in candidates:
                 src = TARGETS[target]['root'] / rel
-                if not src.exists() or (target == '9router' and rel == 'db/data.sqlite'):
+                if not src.exists():
+                    continue
+                if target == 'webui' and rel in {'state.db', 'state.db-wal', 'state.db-shm'}:
                     continue
                 if src.is_file():
                     z.write(src, rel); files.append(rel)
@@ -97,10 +112,12 @@ def create_backup(target):
                     for p in src.rglob('*'):
                         if p.is_file() and not p.is_symlink():
                             arc = p.relative_to(TARGETS[target]['root']).as_posix()
+                            if target == '9router' and arc == 'db/data.sqlite':
+                                continue
                             z.write(p, arc); files.append(arc)
-            manifest = {'format':'labs-template-backup-v1','target':target,'created_at':int(time.time()),'files':len(files),'required':sorted(TARGETS[target]['required'])}
+            manifest = {'format':'leo2agust-lab-backup-v1','target':target,'created_at':int(time.time()),'files':len(files),'required':sorted(TARGETS[target]['required'])}
             if target == 'labs':
-                manifest['username'] = os.environ.get('LABS_USER', '')
+                manifest['username'] = os.environ.get('NUVULABS_USER', '')
                 manifest['excludes'] = ['password', 'session secret', 'SMTP password']
             z.writestr('manifest.json', json.dumps(manifest, separators=(',',':')))
     os.replace(tmp, final)
@@ -115,7 +132,7 @@ def audit_upload(file_storage, expected):
     path = IMPORTS / f'{token}.zip'
     file_storage.save(path)
     if path.stat().st_size > MAX_UPLOAD:
-        path.unlink(missing_ok=True); raise ValueError('file melebihi 700 MB')
+        path.unlink(missing_ok=True); raise ValueError('file melebihi 5 GB')
     try:
         with zipfile.ZipFile(path) as z:
             infos = z.infolist()
@@ -129,7 +146,7 @@ def audit_upload(file_storage, expected):
             if missing:
                 raise ValueError('file wajib hilang: ' + ', '.join(sorted(missing)))
             total = sum(i.file_size for i in infos)
-            if total > 2 * 1024 * 1024 * 1024:
+            if total > 20 * 1024 * 1024 * 1024:
                 raise ValueError('isi arsip terlalu besar')
             if expected == '9router':
                 with tempfile.TemporaryDirectory() as td:
@@ -161,28 +178,32 @@ def restore(token, target):
         try:
             if target == '9router':
                 root.mkdir(parents=True, exist_ok=True)
-                db_src = stage / 'db/data.sqlite'; db_dst = root / 'db/data.sqlite'; db_dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(db_src, db_dst)
-                for rel in ('jwt-secret','machine-id','auth','mitm/aliases.json'):
-                    src, dst = stage / rel, root / rel
-                    if not src.exists(): continue
-                    if dst.exists(): shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copytree(src,dst) if src.is_dir() else shutil.copy2(src,dst)
+                for dst in root.iterdir():
+                    if dst.name in EXCLUDES['9router']: continue
+                    shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
+                for src in stage.iterdir():
+                    os.replace(src, root / src.name)
+                db_dst = root / 'db/data.sqlite'
                 for suffix in ('-wal','-shm'): Path(str(db_dst)+suffix).unlink(missing_ok=True)
             elif target == 'webui':
-                old = root.with_name('webui.restore-old')
-                if old.exists(): shutil.rmtree(old)
-                if root.exists(): os.replace(root, old)
-                os.replace(stage, root)
-                shutil.rmtree(old, ignore_errors=True)
+                # Root is ~/.hermes: replace every backed-up profile/data tree,
+                # but preserve installed code and regenerable excluded trees.
+                root.mkdir(parents=True, exist_ok=True)
+                for dst in root.iterdir():
+                    if dst.name in EXCLUDES['webui']: continue
+                    shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
+                for src in stage.iterdir():
+                    os.replace(src, root / src.name)
+                db_dst = root / 'state.db'
+                for suffix in ('-wal', '-shm'):
+                    Path(str(db_dst) + suffix).unlink(missing_ok=True)
             else:
-                for rel in LAB_FILES:
-                    src, dst = stage / rel, root / rel
-                    if not src.exists():
-                        continue
-                    dst.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(src, dst)
+                for dst in root.iterdir():
+                    if dst.name in EXCLUDES['labs']: continue
+                    shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
+                for src in stage.iterdir():
+                    dst = root / src.name
+                    os.replace(src, dst)
             _run('chown','-R','ubuntu:ubuntu',str(root))
         finally:
             if was_active and target != 'labs': _run('systemctl','start',service)

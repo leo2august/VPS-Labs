@@ -12,7 +12,9 @@ from pathlib import Path
 import urllib.error
 import urllib.request
 
-HERMES_DIR = Path("/home/USER/.hermes")
+import lab_profiles
+
+HERMES_DIR = Path("/home/ubuntu/.hermes")
 CONFIG = HERMES_DIR / "config.yaml"
 SKILLS_DIR = HERMES_DIR / "skills"
 MEMORIES_DIR = HERMES_DIR / "memories"
@@ -148,9 +150,9 @@ GATEKEY_URL = "https://ai.gatekey.cloud/v1/chat/completions"
 # GATEKEY_KEY lama dihapus — key dibaca dari config saat chat dipanggil.
 
 
-def _gatekey_key():
+def _gatekey_key(config=CONFIG):
     try:
-        data = yaml.safe_load(CONFIG.read_text()) or {}
+        data = yaml.safe_load(config.read_text()) or {}
         for p in data.get("custom_providers", []) or []:
             if isinstance(p, dict) and "gatekey" in (p.get("name", "")).lower():
                 return p.get("api_key", "") or ""
@@ -174,7 +176,7 @@ def _provider_model_list(p):
     return out
 
 
-def _resolve_endpoint(model):
+def _resolve_endpoint(model, config=CONFIG):
     """Tentukan (base_url, api_key, model_request, extra_headers) dari config.
 
     Urutan:
@@ -183,13 +185,13 @@ def _resolve_endpoint(model):
     3. fallback default provider dari config
     """
     try:
-        data = yaml.safe_load(CONFIG.read_text()) or {}
+        data = yaml.safe_load(config.read_text()) or {}
     except Exception:
         return None
     provs = data.get("custom_providers", []) or []
     # 1. GateKey
     if str(model).startswith("gatekey-unlimited-"):
-        key = _gatekey_key()
+        key = _gatekey_key(config)
         if key:
             return (GATEKEY_URL, key, model, {})
     # 2. cocok di custom providers
@@ -214,7 +216,7 @@ def _resolve_endpoint(model):
     return None
 
 
-def _soul_system():
+def _soul_system(home=HERMES_DIR):
     """System prompt untuk chat Labs.
 
     Gabungkan persona aktif dari config.yaml (agent.system_prompt — LeoAI) dengan
@@ -230,14 +232,14 @@ def _soul_system():
     except Exception:
         pass
     try:
-        p = HERMES_DIR / "SOUL.md"
+        p = home / "SOUL.md"
         if p.exists():
             txt = p.read_text(errors="replace").strip()
             if txt:
                 parts.append(txt)
     except Exception:
         pass
-    mem = _memory_context()
+    mem = _memory_context(home)
     if mem:
         parts.append(mem)
     sk = _skills_context()
@@ -316,7 +318,8 @@ def _skills_context(max_len=6000):
         return ""
 
 
-def chat(messages: list, model: str = "", provider: str = "", max_tokens: int = 1500) -> dict:
+def chat(messages: list, model: str = "", provider: str = "", max_tokens: int = 1500,
+         profile: str = "default") -> dict:
     """Chat completion — resolve endpoint dari config berdasarkan model/provider.
 
     Provider mana pun dari dropdown Labs (GateKey, B.AI, LimitRouter, Tamandata, dll)
@@ -325,12 +328,14 @@ def chat(messages: list, model: str = "", provider: str = "", max_tokens: int = 
     """
     # Model virtual GateKey punya resolver khusus. Selain itu provider dropdown
     # bersifat otoritatif karena model sama bisa ada pada beberapa relay.
+    home = lab_profiles.profile_home(profile)
+    config = home / "config.yaml"
     if str(model).startswith("gatekey-unlimited-"):
-        ep = _resolve_endpoint(model)
+        ep = _resolve_endpoint(model, config)
     else:
-        ep = _resolve_provider_by_name(provider, model) if provider else None
+        ep = _resolve_provider_by_name(provider, model, config) if provider else None
         if not ep:
-            ep = _resolve_endpoint(model) if model else None
+            ep = _resolve_endpoint(model, config) if model else None
     if not ep:
         return {"ok": False, "error": f"Model '{model}' tidak ditemukan di config. Pilih model dari dropdown."}
     base_url, api_key, request_model, extra_headers = ep
@@ -338,7 +343,7 @@ def chat(messages: list, model: str = "", provider: str = "", max_tokens: int = 
         return {"ok": False, "error": f"Provider untuk model '{model}' tidak punya API key di config."}
 
     msgs = list(messages[-20:])
-    soul = _soul_system()
+    soul = _soul_system(home)
     if soul:
         # sisipkan system prompt di awal (jangan duplikat)
         if not any(m.get("role") == "system" for m in msgs):
@@ -378,12 +383,17 @@ def chat(messages: list, model: str = "", provider: str = "", max_tokens: int = 
         return {"ok": False, "error": str(e)[:300]}
 
 
-def _resolve_provider_by_name(provider, model):
-    """Fallback: resolve endpoint dengan nama provider eksplisit dari config."""
+def _resolve_provider_by_name(provider, model, config=CONFIG):
+    """Resolve provider config; suffix @@UUID memilih akun 9router tertentu."""
     if not provider:
         return None
+    if "@@" in provider:
+        _, connection_id = provider.rsplit("@@", 1)
+        if not re.fullmatch(r"[0-9a-fA-F-]{36}", connection_id):
+            return None
+        return (ROUTER_URL, "9router", model, {"x-connection-id": connection_id})
     try:
-        data = yaml.safe_load(CONFIG.read_text()) or {}
+        data = yaml.safe_load(config.read_text()) or {}
     except Exception:
         return None
     for p in data.get("custom_providers", []) or []:
@@ -395,14 +405,14 @@ def _resolve_provider_by_name(provider, model):
     return None
 
 
-HERMES_PY = "/home/USER/.hermes/hermes-agent/venv/bin/python"
+HERMES_PY = "/home/ubuntu/.hermes/hermes-agent/venv/bin/python"
 
 # ---- Agent job manager (async) ----
 import threading
 AGENT_JOBS = {}
 _AGENT_LOCK = threading.Lock()
-AGENT_JOB_DIR = Path("/home/USER/labs/data/agent-jobs")
-ATTACHMENT_DIR = Path("/home/USER/labs/data/attachments")
+AGENT_JOB_DIR = Path("/home/ubuntu/vps-audit/data/agent-jobs")
+ATTACHMENT_DIR = Path("/home/ubuntu/vps-audit/data/attachments")
 
 
 def _persist_agent_job(job_id):
@@ -428,11 +438,12 @@ def _new_job_id():
     return "agent_" + os.urandom(6).hex()
 
 
-def _agent_env():
+def _agent_env(profile="default"):
+    home = lab_profiles.profile_home(profile)
     return dict(os.environ,
                 HERMES_ACCEPT_HOOKS="1", XDG_RUNTIME_DIR="/run/user/1000",
                 HERMES_SAFE_MODE="0", TERM="dumb",
-                HOME="/home/USER", HERMES_HOME="/home/USER/.hermes",
+                HOME="/home/ubuntu", HERMES_HOME=str(home),
                 USER="ubuntu", LOGNAME="ubuntu")
 
 
@@ -455,7 +466,80 @@ def _history_block(history):
             + "\n".join(rows))
 
 
-def _run_agent_job(job_id, prompt, model, provider, history=None, session_id=""):
+def _resolve_agent_provider(provider, profile="default"):
+    """Map dropdown provider label to a Hermes custom-provider name.
+
+    - ``Name@@<uuid>`` = 9router account-pinned label from ``lab_chat._router_models()``.
+      Strip the ``@@uuid`` suffix and match against registered config providers;
+      if none is found, fall back to the 9router relay for that connection's
+      provider (``kiro`` → ``kiroAI``) so the agent runs through 9router
+      (which distributes to an active account).
+    - Plain labels (Gatekey, B.AI, …) are resolved case-insensitively to the
+      canonical name in config.yaml.
+    - Returns the bare provider name (without ``custom:`` prefix).
+    """
+    if not provider:
+        return ""
+    provider = str(provider).strip().removeprefix("custom:")
+    base = provider
+    conn_id = ""
+    if "@@" in provider:
+        base, _, conn_id = provider.rpartition("@@")
+    # 1) try canonical match by base name (case-insensitive)
+    config = lab_profiles.profile_home(profile) / "config.yaml"
+    try:
+        cfg = yaml.safe_load(config.read_text()) or {}
+    except Exception:
+        cfg = {}
+    for p in cfg.get("custom_providers", []) or []:
+        if isinstance(p, dict) and str(p.get("name", "")).lower() == base.lower():
+            return str(p.get("name"))
+    # 2) 9router account-pinned — map to the relay for its provider family
+    if conn_id:
+        return _relay_for_9r_connection(conn_id, config)
+    # 3) plain label — return as-is (caller prepends custom:)
+    return base
+
+
+def _relay_for_9r_connection(conn_id, config=CONFIG):
+    """Cari relay provider (custom_providers di config) untuk koneksi 9router.
+
+    Kalau koneksi punya nama yang sudah terdaftar di config, pakai itu.
+    Kalau tidak, map berdasarkan family provider 9router: kiro → kiroAI.
+    Mengembalikan nama provider tanpa prefix ``custom:`` (atau '' jika tak ada).
+    """
+    try:
+        import sqlite3
+        con = sqlite3.connect("/home/ubuntu/.9router/db/data.sqlite")
+        con.row_factory = sqlite3.Row
+        row = con.execute(
+            "SELECT provider, name FROM providerConnections WHERE id=?",
+            (conn_id,),
+        ).fetchone()
+        con.close()
+    except Exception:
+        row = None
+    if row is None:
+        return "kiroAI" if conn_id else ""
+    try:
+        cfg = yaml.safe_load(config.read_text()) or {}
+    except Exception:
+        cfg = {}
+    cps = [p for p in (cfg.get("custom_providers") or []) if isinstance(p, dict)]
+    # 1) relay dengan nama sama dengan akun 9router (mis. "TabiAI Akun 5")
+    name = str(row["name"] or "").strip()
+    if name:
+        for p in cps:
+            if str(p.get("name", "")).lower() == name.lower():
+                return str(p.get("name"))
+    # 2) family-based fallback (kiro → kiroAI)
+    prov = str(row["provider"] or "").lower()
+    if prov == "kiro" or prov.startswith("kiro"):
+        return "kiroAI"
+    return name or ""
+
+
+def _run_agent_job(job_id, prompt, model, provider, history=None, session_id="", profile="default"):
     """Jalankan hermes -z di background thread; hasil disimpan ke AGENT_JOBS.
     Partial stdout ditulis ke data/agent-jobs/<job_id>.live.txt utk ditampilkan
     real-time sebagai "agent thinking" di UI."""
@@ -468,6 +552,9 @@ def _run_agent_job(job_id, prompt, model, provider, history=None, session_id="")
         cmd += ["-m", model]
     if provider:
         provider = str(provider).strip()
+        # Hermes custom provider names are case-sensitive. Resolve dropdown label
+        # to canonical config name (for example `gatekey` -> `Gatekey`).
+        provider = _resolve_agent_provider(provider, profile)
         if provider and provider not in {"openrouter", "nous", "anthropic", "openai"} and not provider.startswith("custom:"):
             provider = "custom:" + provider
         cmd += ["--provider", provider]
@@ -475,7 +562,7 @@ def _run_agent_job(job_id, prompt, model, provider, history=None, session_id="")
     proc = None
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, env=_agent_env())
+                                text=True, env=_agent_env(profile))
         with _AGENT_LOCK:
             if job_id in AGENT_JOBS and AGENT_JOBS[job_id].get("cancel"):
                 proc.kill()
@@ -526,7 +613,7 @@ def _run_agent_job(job_id, prompt, model, provider, history=None, session_id="")
                             "--cli", "--yolo", "-m", "gatekey-unlimited-deepseek-v4-flash",
                             "--provider", "custom:Gatekey"]
             proc = subprocess.Popen(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                    text=True, env=_agent_env())
+                                    text=True, env=_agent_env(profile))
             with _AGENT_LOCK:
                 AGENT_JOBS[job_id]["proc"] = proc
                 AGENT_JOBS[job_id].update(phase="Provider utama gagal · Agent fallback aktif",
@@ -560,8 +647,12 @@ def _run_agent_job(job_id, prompt, model, provider, history=None, session_id="")
                 result = {"status": "error", "done": True, "ok": False,
                           "error": (fb_err or fb_reply or "Semua provider Agent gagal")[-500:]}
         else:
+            # stderr dialihkan ke stdout (stderr=STDOUT), jadi pesan error asli
+            # ada di out_s. Jangan buang — tampilkan supaya user tahu alasannya
+            # (mis. "Unknown provider", 402/403, dll), bukan "exit 1" generik.
+            err_s = (err_s or out_s)[-300:]
             result = {"status": "error", "done": True, "ok": False,
-                      "error": err_s[-300:] or f"Agent gagal (exit {rc})"}
+                      "error": err_s or f"Agent gagal (exit {rc})"}
         with _AGENT_LOCK:
             AGENT_JOBS[job_id].update(result)
             AGENT_JOBS[job_id].update(updated_at=time.time(), phase="Selesai" if result.get("ok") else "Gagal")
@@ -597,7 +688,7 @@ def _collect_attachments(job_id, reply):
             src = Path(raw.strip().strip("'\".,)")).expanduser().resolve()
             if not src.is_file() or src.stat().st_size > 200 * 1024 * 1024:
                 continue
-            if not any(str(src).startswith(root) for root in ("/home/USER/", "/tmp/")):
+            if not any(str(src).startswith(root) for root in ("/home/ubuntu/", "/tmp/")):
                 continue
             if str(src) in found:
                 continue
@@ -659,7 +750,7 @@ def delete_attachments(ids):
     return {"removed": removed, "errors": errors}
 
 
-def start_agent_job(prompt, model="", provider="", history=None, session_id=""):
+def start_agent_job(prompt, model="", provider="", history=None, session_id="", profile="default"):
     """Mulai agent job async. Return job_id."""
     if not prompt or not prompt.strip():
         return None
@@ -668,12 +759,13 @@ def start_agent_job(prompt, model="", provider="", history=None, session_id=""):
         AGENT_JOBS[job_id] = {"id": job_id, "status": "running", "done": False,
                               "cancel": False, "proc": None, "prompt": prompt[:100],
                               "model": model, "provider": provider,
+                              "profile": lab_profiles.normalize_name(profile),
                               "session_id": session_id,
                               "phase": "Menyiapkan agent", "created_at": time.time(),
                               "updated_at": time.time()}
         _persist_agent_job(job_id)
     t = threading.Thread(target=_run_agent_job,
-                         args=(job_id, prompt, model, provider, history, session_id),
+                         args=(job_id, prompt, model, provider, history, session_id, profile),
                          daemon=True)
     t.start()
     return job_id

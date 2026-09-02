@@ -1,5 +1,4 @@
-"""Labs — ping test model, provider rename, full config viewer."""
-import os
+"""Leo2agust Lab — ping test model, provider rename, full config viewer."""
 import json
 import re
 import subprocess
@@ -10,7 +9,7 @@ import urllib.error
 import urllib.request
 import yaml
 
-HERMES_DIR = Path(os.environ.get('LABS_HERMES_DIR', '/home/USER/.hermes'))
+HERMES_DIR = Path("/home/ubuntu/.hermes")
 CONFIG = HERMES_DIR / "config.yaml"
 
 
@@ -98,7 +97,8 @@ def ping_model(base_url: str, api_key: str, model: str, timeout: int = 25,
     url = base_url + "/chat/completions"
     body = json.dumps({"model": model, "messages": [{"role": "user", "content": "ping"}],
                        "max_tokens": 4, "stream": False}).encode()
-    headers = {"Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json",
+               "User-Agent": "OpenAI/Python 1.30.0"}
     if api_key:
         headers["Authorization"] = "Bearer " + str(api_key)
     start = time.time()
@@ -264,4 +264,14 @@ def save_core_config(model_default=None, model_provider=None,
         _save_cfg(data)
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
-    return {"ok": True, "model": data.get("model"), "fallback": data.get("fallback_providers")}
+    # restart task-router (user ubuntu) supaya config baru benar-benar dipakai routing
+    try:
+        r = subprocess.run(["sudo", "su", "-", "ubuntu", "-c",
+                            "XDG_RUNTIME_DIR=/run/user/1000 systemctl --user restart hermes-task-router.service"],
+                           capture_output=True, text=True, timeout=30)
+        router_restart = r.returncode == 0
+    except Exception as e:
+        router_restart = False
+        r = type("R", (), {"stderr": str(e)})()
+    return {"ok": True, "model": data.get("model"), "fallback": data.get("fallback_providers"),
+            "router_restart": router_restart, "message": (getattr(r, "stderr", "") or getattr(r, "stdout", "")).strip()[:200]}

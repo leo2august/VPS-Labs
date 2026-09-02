@@ -6,7 +6,10 @@ import time
 import uuid
 from pathlib import Path
 
-STATE_DB = Path("/home/USER/.hermes/state.db")
+STATE_DB = Path("/home/ubuntu/.hermes/state.db")
+COMPRESS_REQUEST = Path("/home/ubuntu/.hermes/.labs_compress_request.json")
+COMPRESS_RESULT = Path("/home/ubuntu/.hermes/.labs_compress_result.json")
+COMPRESS_TIMEOUT = 300
 LAB_SETTINGS = Path(__file__).resolve().parent / "data" / "lab-settings.json"
 LAB_OPTIONS = {
     "brand_name": {"label": "Nama Branding", "description": "Nama header/sidebar/login — isi bebas (mis. nama perusahaan atau tim).", "type": "text", "default": "Labs"},
@@ -73,6 +76,69 @@ def get_session(sid):
             "tool_call_count": data.get("tool_call_count") or 0,
             "input_tokens": data.get("input_tokens") or 0, "output_tokens": data.get("output_tokens") or 0,
             "messages": [dict(x) for x in msgs]}
+
+
+def gateway_contexts():
+    """Live gateway routing metrics. Context is provider-reported prompt usage."""
+    with _db() as con:
+        routes = con.execute("SELECT session_key,entry_json,updated_at FROM gateway_routing ORDER BY updated_at DESC").fetchall()
+        result = []; seen = set()
+        for row in routes:
+            try: entry = json.loads(row["entry_json"])
+            except (TypeError, ValueError): continue
+            platform = entry.get("platform") or (entry.get("origin") or {}).get("platform")
+            if platform not in {"telegram", "whatsapp"} or platform in seen or entry.get("suspended"): continue
+            seen.add(platform)
+            sid = entry.get("session_id")
+            session = con.execute("SELECT model,message_count FROM sessions WHERE id=?", (sid,)).fetchone()
+            if not session: continue
+            counts = con.execute("""SELECT COUNT(*) total,
+                SUM(CASE WHEN role='user' THEN 1 ELSE 0 END) user_messages,
+                SUM(COALESCE(token_count,0)) stored_tokens
+                FROM messages WHERE session_id=? AND active=1 AND compacted=0""", (sid,)).fetchone()
+            origin = entry.get("origin") or {}
+            result.append({
+                "session_key": row["session_key"], "session_id": sid, "platform": platform,
+                "gateway_label": _source_label(platform), "display_name": entry.get("display_name") or origin.get("chat_name") or "Chat",
+                "chat_type": entry.get("chat_type") or origin.get("chat_type") or "dm", "model": session["model"] or "—",
+                "messages": int(counts["total"] or session["message_count"] or 0),
+                "user_messages": int(counts["user_messages"] or 0),
+                "context_tokens": max(0, int(entry.get("last_prompt_tokens") or 0)),
+                "stored_tokens": int(counts["stored_tokens"] or 0), "updated_at": row["updated_at"], "compressing": False,
+            })
+    try:
+        pending = json.loads(COMPRESS_REQUEST.read_text())
+        age = time.time() - float(pending.get("requested_at") or 0)
+        if age > COMPRESS_TIMEOUT:
+            COMPRESS_REQUEST.unlink(missing_ok=True)
+            pending = None
+        if pending:
+            for item in result: item["compressing"] = item["session_key"] == pending.get("session_key")
+    except (OSError, ValueError, TypeError): pass
+    try: last_result = json.loads(COMPRESS_RESULT.read_text())
+    except (OSError, ValueError): last_result = None
+    return {"ok": True, "gateways": result, "last_result": last_result, "updated_at": time.time()}
+
+
+def request_gateway_compress(session_key):
+    session_key = str(session_key or "").strip()
+    with _db() as con:
+        row = con.execute("SELECT entry_json FROM gateway_routing WHERE session_key=?", (session_key,)).fetchone()
+    if not row: return {"ok": False, "error": "Sesi gateway tidak ditemukan"}
+    try: entry = json.loads(row["entry_json"])
+    except ValueError: return {"ok": False, "error": "Data sesi rusak"}
+    platform = entry.get("platform") or (entry.get("origin") or {}).get("platform")
+    if platform not in {"telegram", "whatsapp"}: return {"ok": False, "error": "Gateway tidak didukung"}
+    if COMPRESS_REQUEST.exists():
+        try:
+            pending = json.loads(COMPRESS_REQUEST.read_text())
+            if time.time() - float(pending.get("requested_at") or 0) <= COMPRESS_TIMEOUT:
+                return {"ok": False, "error": "Compress lain masih berjalan"}
+        except (OSError, ValueError, TypeError): pass
+        COMPRESS_REQUEST.unlink(missing_ok=True)
+    payload = {"session_key": session_key, "requested_at": time.time()}
+    tmp = COMPRESS_REQUEST.with_suffix(".tmp"); tmp.write_text(json.dumps(payload)); os.replace(tmp, COMPRESS_REQUEST)
+    return {"ok": True, "status": "queued", "session_key": session_key}
 
 
 def record_lab_exchange(sid, user_text, reply, model):

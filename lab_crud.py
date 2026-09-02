@@ -1,4 +1,4 @@
-"""Labs — CRUD: providers (config.yaml), skills, sessions.
+"""Leo2agust Lab — CRUD: providers (config.yaml), skills, sessions.
 9router-style provider management + WebUI-style content editing.
 """
 import json
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-HERMES_DIR = Path(os.environ.get('LABS_HERMES_DIR', '/home/USER/.hermes'))
+HERMES_DIR = Path("/home/ubuntu/.hermes")
 CONFIG = HERMES_DIR / "config.yaml"
 SKILLS_DIR = HERMES_DIR / "skills"
 WEBUI_SESSIONS_DIR = HERMES_DIR / "webui" / "sessions"

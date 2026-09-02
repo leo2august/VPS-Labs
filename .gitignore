@@ -1,47 +1,70 @@
-# Runtime / private data — never commit
-data/labs.env
-data/lab-account.json
-data/password-reset.json
-data/notifications.db
-data/lab-settings.json
-backups/
-__pycache__/
-*.pyc
-
-# Audit reports (contain host IP / ports) — never commit
+# Audit reports
+# These contain the host's public IP, hostname, open ports and running
+# services. Never commit them.
 vps-audit-report*.txt
-latest-report.txt
 
-# QA / dev artifacts
-qa*.py
-qa-*.png
-screenshot*.png
-before-*.png
-
-# Backups / temp
-*.bak
-*.orig
-*.rej
-*.log
-*.tmp
-*.zip
-
-# OS / editor
+# macOS
 .DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+
+# Windows
 Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# Editors and IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
+.*.sw?
+*.sublime-workspace
 
-# Data, backups, build artifacts
-data/
-backups/
+# AI assistant tooling
+.claude/
+CLAUDE.local.md
+AGENTS.local.md
+.cursor/
+.aider*
+.continue/
+.windsurf/
+.github/copilot-instructions.local.md
+
+# oh-my-claudecode runtime state
+# .omc/skills is the intentional committable exception for project skills,
+# so ignore the contents rather than the directory itself.
+.omc/*
+!.omc/skills/
+
+# Logs and temp files
+*.log
+*.tmp
 *.bak
 *.bak-*
-*.tmp
-out/
-*.apk
-*.keystore
-*.zip
+*.orig
+*.rej
+__pycache__/
+*.py[cod]
+
+# Runtime data, secrets, generated backups, and QA artifacts
+.backup-*/
+backups/
+data/
+settings.backup.json
+latest-report.txt
+qa/
 qa-*.png
 before-redesign.png
-latest-report.txt
+static/*-snapshot.json
+/index.html

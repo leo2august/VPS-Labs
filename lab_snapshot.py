@@ -1,9 +1,8 @@
-import os
-"""Labs — 9router snapshot reader (works after 9router is stopped)."""
+"""Leo2agust Lab — 9router snapshot reader (works after 9router is stopped)."""
 import json
 from pathlib import Path
 
-SNAPSHOT = Path(__file__).resolve().parent / 'static' / '9router-snapshot.json'
+SNAPSHOT = Path("/home/ubuntu/vps-audit/static/9router-snapshot.json")
 
 
 def get_snapshot() -> dict:
@@ -27,7 +26,7 @@ def models_for_picker() -> dict:
                 seen.add(m)
                 out.append({"id": m, "provider": "9router", "group": "9router"})
     try:
-        cfg = yaml.safe_load(open(str(Path(os.environ.get('LABS_HERMES_DIR', '/home/USER/.hermes')) / 'config.yaml'))) or {}
+        cfg = yaml.safe_load(open("/home/ubuntu/.hermes/config.yaml")) or {}
     except Exception:
         cfg = {}
     for p in cfg.get("custom_providers", []) or []:
