@@ -1,4 +1,4 @@
-"""Leo2agust Lab — model listing for chat."""
+"""VPS Labs — model listing for chat."""
 import json, os, sqlite3, yaml
 from pathlib import Path
 

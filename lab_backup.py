@@ -52,7 +52,7 @@ def _manifest(z):
         m = json.loads(raw)
     except (KeyError, json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError('manifest.json tidak valid') from e
-    if m.get('format') != 'leo2agust-lab-backup-v1' or m.get('target') not in TARGETS:
+    if m.get('format') != 'vps-labs-backup-v1' or m.get('target') not in TARGETS:
         raise ValueError('jenis backup tidak dikenali')
     return m
 
@@ -115,9 +115,9 @@ def create_backup(target):
                             if target == '9router' and arc == 'db/data.sqlite':
                                 continue
                             z.write(p, arc); files.append(arc)
-            manifest = {'format':'leo2agust-lab-backup-v1','target':target,'created_at':int(time.time()),'files':len(files),'required':sorted(TARGETS[target]['required'])}
+            manifest = {'format':'vps-labs-backup-v1','target':target,'created_at':int(time.time()),'files':len(files),'required':sorted(TARGETS[target]['required'])}
             if target == 'labs':
-                manifest['username'] = os.environ.get('NUVULABS_USER', '')
+                manifest['username'] = os.environ.get('LABS_USER', '')
                 manifest['excludes'] = ['password', 'session secret', 'SMTP password']
             z.writestr('manifest.json', json.dumps(manifest, separators=(',',':')))
     os.replace(tmp, final)

@@ -16,7 +16,7 @@ with sync_playwright() as p:
   for label,width,height in [('desktop',1440,900),('mobile',390,844)]:
     browser=p.chromium.launch(headless=True); page=browser.new_page(viewport={'width':width,'height':height})
     errors=[]; page.on('pageerror',lambda e: errors.append(str(e))); page.on('console',lambda m: errors.append(m.text) if m.type=='error' else None)
-    page.goto('http://127.0.0.1:9118/login'); page.fill('input[name=username]',env('NUVULABS_USER')); page.fill('input[name=password]',env('NUVULABS_PASSWORD')); page.click('button[type=submit]'); page.wait_for_selector('#overview.active')
+    page.goto('http://127.0.0.1:9118/login'); page.fill('input[name=username]',env('LABS_USER')); page.fill('input[name=password]',env('LABS_PASSWORD')); page.click('button[type=submit]'); page.wait_for_selector('#overview.active')
     page.evaluate("document.documentElement.dataset.theme='dark'")
     rows=[]
     for pid in pages:

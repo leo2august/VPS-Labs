@@ -1,4 +1,4 @@
-"""Leo2agust Lab — ping test model, provider rename, full config viewer."""
+"""VPS Labs — ping test model, provider rename, full config viewer."""
 import json
 import re
 import subprocess

@@ -2,8 +2,8 @@ import os
 from playwright.sync_api import sync_playwright
 
 BASE = "http://127.0.0.1:9118"
-USER = os.environ["NUVULABS_USER"]
-PASSWORD = os.environ["NUVULABS_PASSWORD"]
+USER = os.environ["LABS_USER"]
+PASSWORD = os.environ["LABS_PASSWORD"]
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)

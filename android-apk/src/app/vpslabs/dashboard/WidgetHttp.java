@@ -1,4 +1,4 @@
-package com.leo2agust.labs;
+package app.vpslabs.dashboard;
 
 import android.content.Context;
 import android.app.PendingIntent;
@@ -82,7 +82,7 @@ final class WidgetHttp {
 
     static PendingIntent refresh(Context context, Class<?> provider, int widgetId, int request) {
         Intent intent = new Intent(context, provider);
-        intent.setAction("com.leo2agust.labs.REFRESH_WIDGET");
+        intent.setAction("app.vpslabs.dashboard.REFRESH_WIDGET");
         intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId);
         return PendingIntent.getBroadcast(context, request + widgetId, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);

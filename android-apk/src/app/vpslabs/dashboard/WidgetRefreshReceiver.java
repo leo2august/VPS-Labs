@@ -1,3 +1,3 @@
-package com.leo2agust.labs;
+package app.vpslabs.dashboard;
 import android.appwidget.*;import android.content.*;
 public class WidgetRefreshReceiver extends BroadcastReceiver{@Override public void onReceive(Context c,Intent i){final PendingResult p=goAsync();final Context a=c.getApplicationContext();new Thread(new Runnable(){public void run(){try{AppWidgetManager m=AppWidgetManager.getInstance(a);int[] ids=m.getAppWidgetIds(new ComponentName(a,LabsStatusWidget.class));for(int id:ids)LabsStatusWidget.updateSync(a,m,id);ids=m.getAppWidgetIds(new ComponentName(a,LabsPerfWidget.class));for(int id:ids)LabsPerfWidget.updateSync(a,m,id);ids=m.getAppWidgetIds(new ComponentName(a,LabsLogWidget.class));for(int id:ids)LabsLogWidget.updateSync(a,m,id);ids=m.getAppWidgetIds(new ComponentName(a,LabsStorageWidget.class));for(int id:ids)LabsStorageWidget.updateSync(a,m,id);}finally{WidgetHttp.scheduleAutoRefresh(a);p.finish();}}}).start();}}

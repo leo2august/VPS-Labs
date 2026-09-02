@@ -1,4 +1,4 @@
-"""Leo2agust Lab — 9router snapshot reader (works after 9router is stopped)."""
+"""VPS Labs — 9router snapshot reader (works after 9router is stopped)."""
 import json
 from pathlib import Path
 

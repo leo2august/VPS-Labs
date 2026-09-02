@@ -1,5 +1,5 @@
 [Unit]
-Description=Private VPS Sentinel Dashboard
+Description=Private VPS Labs Dashboard
 After=network.target
 
 [Service]

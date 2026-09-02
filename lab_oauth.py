@@ -236,7 +236,6 @@ def poll_github_token(flow_id):
 # No AWS client registration needed — kiro's own OAuth proxy.
 # ---------------------------------------------------------------------------
 KIRO_SOCIAL_BASE = "https://prod.us-east-1.auth.desktop.kiro.dev"
-KIRO_LABS_HOST = "https://labs.leo2agust.my.id"
 # kiro server hanya menerima redirect_uri terdaftar (custom protocol kiro://).
 KIRO_REDIRECT = "kiro://kiro.kiroAgent/authenticate-success"
 

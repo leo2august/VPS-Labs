@@ -1,4 +1,4 @@
-"""Leo2agust Lab — router & webui integration endpoints (read + safe actions)."""
+"""VPS Labs — router & webui integration endpoints (read + safe actions)."""
 import ast
 import json
 import os

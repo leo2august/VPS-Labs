@@ -1,4 +1,4 @@
-package com.leo2agust.labs;
+package app.vpslabs.dashboard;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;

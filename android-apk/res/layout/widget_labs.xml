@@ -43,7 +43,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
-        android:text="labs.leo2agust.my.id"
+        android:text="labs.example.com"
         android:textColor="#dc6268"
         android:textSize="10sp" />
 </LinearLayout>

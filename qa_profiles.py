@@ -3,8 +3,8 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 BASE = "http://127.0.0.1:9118"
-user = os.environ["NUVULABS_USER"]
-password = os.environ["NUVULABS_PASSWORD"]
+user = os.environ["LABS_USER"]
+password = os.environ["LABS_PASSWORD"]
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)

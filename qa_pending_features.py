@@ -10,8 +10,8 @@ with sync_playwright() as p:
         page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
         page.on("pageerror", lambda exc: errors.append(str(exc)))
         page.goto(BASE + "/login", wait_until="networkidle")
-        page.locator('input[name="username"]').fill(os.environ["NUVULABS_USER"])
-        page.locator('input[name="password"]').fill(os.environ["NUVULABS_PASSWORD"])
+        page.locator('input[name="username"]').fill(os.environ["LABS_USER"])
+        page.locator('input[name="password"]').fill(os.environ["LABS_PASSWORD"])
         page.locator("button.submit").click()
         page.wait_for_url(BASE + "/")
 

@@ -1,4 +1,4 @@
-"""Leo2agust Lab — SOUL editor, session continue, 9router detail."""
+"""VPS Labs — SOUL editor, session continue, 9router detail."""
 import json
 import subprocess
 from pathlib import Path

@@ -1,4 +1,4 @@
-package com.leo2agust.labs;
+package app.vpslabs.dashboard;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -61,7 +61,7 @@ public class InstallationActivity extends Activity {
         content.addView(stepText("2. SSH ke server kamu:"));
         content.addView(code("ssh user@IP_VPS"));
         content.addView(stepText("3. Clone template Labs:"));
-        content.addView(code("git clone https://github.com/leo2august/VPS-Labs.git\ncd VPS-Labs"));
+        content.addView(code("git clone https://github.com/OWNER/VPS-Labs.git\ncd VPS-Labs"));
         content.addView(stepText("4. Jalankan installer:"));
         content.addView(code("sudo bash install.sh"));
         content.addView(stepText("5. Ikuti prompt: isi nama branding, port, dan password admin."));
@@ -74,8 +74,8 @@ public class InstallationActivity extends Activity {
         content.addView(stepText("3. Isi Settings: https://labs.domain.com"));
 
         content.addView(stepTitle("AKSES B — Langsung IP VPS"));
-        content.addView(stepText("1. Set NUVULABS_HOST=0.0.0.0 pada Environment service Labs, lalu restart service."));
-        content.addView(code("NUVULABS_HOST=0.0.0.0\nNUVULABS_PORT=9118\nNUVULABS_SECURE_COOKIE=0"));
+        content.addView(stepText("1. Set LABS_HOST=0.0.0.0 pada Environment service Labs, lalu restart service."));
+        content.addView(code("LABS_HOST=0.0.0.0\nLABS_PORT=9118\nLABS_SECURE_COOKIE=0"));
         content.addView(stepText("2. Izinkan port 9118 hanya dari IP kamu/VPN di firewall."));
         content.addView(code("sudo ufw allow from IP_KAMU to any port 9118 proto tcp"));
         content.addView(stepText("3. Isi Settings: http://IP_VPS:9118"));
@@ -85,7 +85,7 @@ public class InstallationActivity extends Activity {
         content.addView(stepTitle("CARA B — Pakai Agen / AI Assistant"));
         content.addView(stepText("1. Berikan instruksi ini ke asisten AI kamu (mis. Hermes):"));
         content.addView(code("Instal VPS Labs di server ini:\n" +
-                "1. git clone https://github.com/leo2august/VPS-Labs.git ~/labs\n" +
+                "1. git clone https://github.com/OWNER/VPS-Labs.git ~/labs\n" +
                 "2. cd ~/labs " + "&&" + " bash install.sh\n" +
                 "3. Isi brand name, sub-judul, port, dan password admin\n" +
                 "4. Pastikan service labs aktif dan lapor URL loginnya"));
@@ -105,7 +105,7 @@ public class InstallationActivity extends Activity {
         open.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 try {
-                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/leo2august/VPS-Labs")));
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/OWNER/VPS-Labs")));
                 } catch (Exception ignored) {}
             }
         });

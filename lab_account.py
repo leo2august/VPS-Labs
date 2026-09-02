@@ -25,13 +25,13 @@ def _write(path, data):
 
 def summary():
     data = _read(DATA, {})
-    return {'ok': True, 'username': os.environ.get('NUVULABS_USER', ''),
+    return {'ok': True, 'username': os.environ.get('LABS_USER', ''),
             'email': data.get('email', ''), 'email_login': bool(data.get('email')),
-            'recovery_ready': bool(data.get('email') and os.environ.get('NUVULABS_SMTP_HOST'))}
+            'recovery_ready': bool(data.get('email') and os.environ.get('LABS_SMTP_HOST'))}
 
 
 def set_email(email, current_password):
-    if not hmac.compare_digest(current_password, os.environ.get('NUVULABS_PASSWORD', '')):
+    if not hmac.compare_digest(current_password, os.environ.get('LABS_PASSWORD', '')):
         return {'ok': False, 'error': 'password Labs salah'}
     email = email.strip().lower()
     if email and not EMAIL_RE.fullmatch(email):
@@ -41,26 +41,26 @@ def set_email(email, current_password):
 
 
 def valid_identifier(identifier):
-    username = os.environ.get('NUVULABS_USER', '')
+    username = os.environ.get('LABS_USER', '')
     email = _read(DATA, {}).get('email', '')
     return hmac.compare_digest(identifier, username) or bool(email and hmac.compare_digest(identifier.lower(), email.lower()))
 
 
 def request_reset(identifier, base_url):
     # Same response for known/unknown identifiers prevents account discovery.
-    if not valid_identifier(identifier) or not os.environ.get('NUVULABS_SMTP_HOST'):
+    if not valid_identifier(identifier) or not os.environ.get('LABS_SMTP_HOST'):
         return {'ok': True, 'message': 'Jika akun dan email pemulihan aktif, tautan reset sudah dikirim.'}
     token = secrets.token_urlsafe(32)
     _write(RESET, {'hash': hashlib.sha256(token.encode()).hexdigest(), 'expires': int(time.time()) + 900})
     recipient = _read(DATA, {}).get('email', '')
     msg = EmailMessage()
-    msg['Subject'] = 'Reset password Leo2agust Labs'
-    msg['From'] = os.environ.get('NUVULABS_SMTP_FROM', os.environ.get('NUVULABS_SMTP_USER', ''))
+    msg['Subject'] = 'Reset password VPS Labs'
+    msg['From'] = os.environ.get('LABS_SMTP_FROM', os.environ.get('LABS_SMTP_USER', ''))
     msg['To'] = recipient
     msg.set_content(f'Tautan reset berlaku 15 menit:\n{base_url.rstrip("/")}/reset/{token}\n\nAbaikan jika kamu tidak meminta reset.')
-    host = os.environ['NUVULABS_SMTP_HOST']; port = int(os.environ.get('NUVULABS_SMTP_PORT', '465'))
+    host = os.environ['LABS_SMTP_HOST']; port = int(os.environ.get('LABS_SMTP_PORT', '465'))
     with smtplib.SMTP_SSL(host, port, context=ssl.create_default_context(), timeout=15) as smtp:
-        smtp.login(os.environ.get('NUVULABS_SMTP_USER', ''), os.environ.get('NUVULABS_SMTP_PASSWORD', ''))
+        smtp.login(os.environ.get('LABS_SMTP_USER', ''), os.environ.get('LABS_SMTP_PASSWORD', ''))
         smtp.send_message(msg)
     return {'ok': True, 'message': 'Jika akun dan email pemulihan aktif, tautan reset sudah dikirim.'}
 
@@ -83,7 +83,7 @@ def change_unit_password(new_password):
         return {'ok': False, 'error': 'password tidak boleh berisi spasi, %, tanda kutip, atau backslash'}
     env_file = Path('/home/ubuntu/vps-audit/data/labs.env')
     text = env_file.read_text()
-    text, count = re.subn(r'(?m)^NUVULABS_PASSWORD=.*$', 'NUVULABS_PASSWORD=' + new_password, text)
+    text, count = re.subn(r'(?m)^LABS_PASSWORD=.*$', 'LABS_PASSWORD=' + new_password, text)
     if count != 1:
         return {'ok': False, 'error': 'konfigurasi password Labs tidak ditemukan'}
     tmp = env_file.with_suffix('.tmp'); tmp.write_text(text); os.chmod(tmp, 0o600); os.replace(tmp, env_file)
@@ -102,6 +102,6 @@ def reset_password(token, new_password):
 
 if __name__ == '__main__':
     assert not valid_identifier('__unknown__')
-    assert EMAIL_RE.fullmatch('leo@example.com')
+    assert EMAIL_RE.fullmatch('operator@example.com')
     assert not EMAIL_RE.fullmatch('broken')
     print('lab_account self-check OK')

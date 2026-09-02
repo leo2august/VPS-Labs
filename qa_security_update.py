@@ -16,8 +16,8 @@ with sync_playwright() as p:
         errors=[]
         page.on('pageerror', lambda e: errors.append(str(e)))
         page.goto('http://127.0.0.1:9118/login')
-        page.fill('input[name=username]', env('NUVULABS_USER'))
-        page.fill('input[name=password]', env('NUVULABS_PASSWORD'))
+        page.fill('input[name=username]', env('LABS_USER'))
+        page.fill('input[name=password]', env('LABS_PASSWORD'))
         page.click('button[type=submit]')
         page.wait_for_selector('#overview.active')
         if label == 'mobile': page.click('.menu')

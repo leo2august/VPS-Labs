@@ -1,4 +1,4 @@
-package com.leo2agust.labs;
+package app.vpslabs.dashboard;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -86,21 +86,12 @@ public class SettingsActivity extends Activity {
         brandInput.setBackground(rounded(Color.parseColor("#ffffff"), Color.parseColor("#d8d2c5")));
         root.addView(brandInput);
         TextView brandHelp = new TextView(this);
-        brandHelp.setText("Otomatis terisi dari URL (labs.NAMA.domain → NAMA). Bisa diedit manual.");
+        brandHelp.setText("Identitas default VPS Labs. Bisa diedit manual tanpa mengikuti domain server.");
         brandHelp.setTextSize(11);
         brandHelp.setTextColor(Color.parseColor("#8896a8"));
         brandHelp.setPadding(0, dp(6), 0, dp(16));
         root.addView(brandHelp);
 
-        // Auto-detect Nama Labs setelah brandInput siap.
-        urlInput.addTextChangedListener(new android.text.TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            public void onTextChanged(CharSequence s, int a, int b, int c) {
-                String detected = detectBrandFromUrl(s.toString().trim());
-                if (!detected.isEmpty()) brandInput.setText(detected);
-            }
-            public void afterTextChanged(android.text.Editable s) {}
-        });
 
         // Section: Bottom nav
         root.addView(sectionLabel("PILIH MENU NAVIGASI BAWAH"));
@@ -212,7 +203,7 @@ public class SettingsActivity extends Activity {
         }
         String brand = brandInput.getText().toString().trim();
         if (brand.isEmpty()) {
-            brand = detectBrandFromUrl(url);
+            brand = "VPS Labs";
         }
         SharedPreferences.Editor e = prefs.edit();
         e.putString("labs_url", url);
@@ -229,26 +220,6 @@ public class SettingsActivity extends Activity {
         int count = 0;
         for (CheckBox check : tabChecks) if (check != null && check.isChecked()) count++;
         return count;
-    }
-
-    // Deteksi brand dari URL: https://labs.NAMA.domain → NAMA; https://NAMA.domain → NAMA
-    private String detectBrandFromUrl(String url) {
-        try {
-            String u = url.trim();
-            if (!u.startsWith("http")) u = "https://" + u;
-            String host = new java.net.URL(u).getHost();
-            String[] parts = host.split("\\.");
-            if (parts.length >= 3 && parts[0].equals("labs")) {
-                return parts[1];
-            } else if (host.matches("^\\d{1,3}(\\.\\d{1,3}){3}$")) {
-                return "Labs VPS";
-            } else if (parts.length >= 2) {
-                return parts[0];
-            }
-        } catch (Exception e) {
-            // abaikan
-        }
-        return "";
     }
 
     private int dp(int v) {

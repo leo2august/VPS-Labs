@@ -1,4 +1,4 @@
-"""Leo2agust Lab — config viewer, gateway control, usage stats."""
+"""VPS Labs — config viewer, gateway control, usage stats."""
 import json
 import os
 import re
@@ -621,7 +621,7 @@ def usage_report_pdf(data):
     def new_page(number):
         im = Image.new("RGB", (W, H), paper); d = ImageDraw.Draw(im)
         d.rectangle((0, 0, W, 230), fill=navy); d.rectangle((0, 0, 18, H), fill=red)
-        d.text((margin, 58), "LEO2AGUST LABS", fill=white, font=font(28, True))
+        d.text((margin, 58), "VPS LABS", fill=white, font=font(28, True))
         d.text((margin, 108), "AI Usage Report", fill=white, font=font(54, True))
         d.text((margin, 177), f"{period} hari  •  {datetime.now(timezone(timedelta(hours=7))):%d %b %Y, %H:%M WIB}", fill="#b8c8e4", font=font(21))
         d.text((W-margin-120, H-54), f"PAGE {number:02d}", fill=muted, font=font(17, True))

@@ -1,21 +1,21 @@
 # =========================================================
-# VPS Sentinel Labs — systemd unit example
+# VPS Labs — systemd unit example
 # Adjust User / WorkingDirectory / ExecStart / EnvironmentFile to your setup,
 # then install to /etc/systemd/system/ and: systemctl daemon-reload
 # =========================================================
 [Unit]
-Description=Private VPS Sentinel Dashboard
+Description=Private VPS Labs Dashboard
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/vps-sentinel
-ExecStart=/usr/bin/python3 /opt/vps-sentinel/app.py
+WorkingDirectory=/opt/vps-labs
+ExecStart=/usr/bin/python3 /opt/vps-labs/app.py
 Restart=on-failure
 RestartSec=3
 Environment=PYTHONUNBUFFERED=1
-EnvironmentFile=/opt/vps-sentinel/data/labs.env
+EnvironmentFile=/opt/vps-labs/data/labs.env
 # Generate once: openssl rand -hex 32  (or set inside data/labs.env as LABS_SECRET)
 Environment=LABS_SECURE_COOKIE=1
 # Hardening (optional but recommended)
@@ -24,7 +24,7 @@ PrivateTmp=true
 ProtectHome=read-only
 ProtectSystem=strict
 # Read-write paths the app needs (logs, backups, webui, ssh, audit reports)
-ReadWritePaths=/opt/vps-sentinel /etc/ssh/sshd_config.d /proc/sys/vm/drop_caches
+ReadWritePaths=/opt/vps-labs /etc/ssh/sshd_config.d /proc/sys/vm/drop_caches
 
 [Install]
 WantedBy=multi-user.target

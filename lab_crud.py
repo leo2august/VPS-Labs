@@ -1,4 +1,4 @@
-"""Leo2agust Lab — CRUD: providers (config.yaml), skills, sessions.
+"""VPS Labs — CRUD: providers (config.yaml), skills, sessions.
 9router-style provider management + WebUI-style content editing.
 """
 import json

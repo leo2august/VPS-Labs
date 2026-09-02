@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Leo2agust Lab — Update center.
+"""VPS Labs — Update center.
 
 One place to safely update every component on the VPS:
   - hermes  : Hermes Agent (git + venv reinstall) via `hermes update`

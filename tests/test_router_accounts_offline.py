@@ -1,7 +1,7 @@
 import importlib.util
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -103,12 +103,12 @@ class RouterAccountsOfflineTests(unittest.TestCase):
 
     def test_offline_delete_writes_db(self):
         """Offline delete removes row from SQLite."""
+        con = MagicMock()
         with patch.object(ra, "_call", side_effect=ValueError("9router tidak aktif")), \
-             patch.object(ra, "sqlite3") as sql:
-            con = sql.Mock()
-            sql.connect.return_value = con
+             patch.object(ra, "connect_write", return_value=con):
             result = ra.delete_account("abc")
-        con.execute.assert_called_once_with("DELETE FROM providerConnections WHERE id=?", ("abc",))
+        con.execute.assert_any_call("BEGIN IMMEDIATE")
+        con.execute.assert_any_call("DELETE FROM providerConnections WHERE id=?", ("abc",))
         con.commit.assert_called_once()
         self.assertEqual(result["mode"], "db")
 

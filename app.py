@@ -1,6 +1,6 @@
 """
-⚠️  VPS Sentinel Labs — Copyright (c) 2026 Leo2agust. All Rights Reserved.
-    License: https://github.com/leo2august/VPS-Labs/blob/main/LICENSE
+⚠️  VPS Labs — Copyright (c) 2026 VPS Labs. All Rights Reserved.
+    License: https://github.com/OWNER/VPS-Labs/blob/main/LICENSE
     This software may be installed on your own server for personal use only.
     Redistribution, forking, or claiming ownership is prohibited.
 """
@@ -45,14 +45,14 @@ def _lab_brand():
     try:
         import lab_operations
         v = lab_operations.get_lab_settings().get("values", {})
-        return (v.get("brand_name") or "Labs"), (v.get("brand_sub") or "Laboratory")
+        return (v.get("brand_name") or "VPS Labs"), (v.get("brand_sub") or "Server Management")
     except Exception:
-        return "Labs", "Laboratory"
+        return "VPS Labs", "Server Management"
 
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("NUVULABS_SECRET", "")
-app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=os.environ.get("NUVULABS_SECURE_COOKIE") == "1", PERMANENT_SESSION_LIFETIME=43200, MAX_CONTENT_LENGTH=200 * 1024 * 1024)
+app.secret_key = os.environ.get("LABS_SECRET", "")
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_SECURE=os.environ.get("LABS_SECURE_COOKIE") == "1", PERMANENT_SESSION_LIFETIME=43200, MAX_CONTENT_LENGTH=200 * 1024 * 1024)
 
 # ---- CSRF defense (defense-in-depth on top of SameSite=Lax) ----
 _CSRF_SAFE_PATHS = ("/login", "/forgot-password", "/logout", "/reset/", "/health")
@@ -86,7 +86,7 @@ def _security_headers(resp):
     resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
     if resp.headers.get("Server", "").startswith("Werkzeug"):
-        resp.headers["Server"] = "Leo2agust"
+        resp.headers["Server"] = "VPS Labs"
     return resp
 
 # ---- Login brute-force guard (in-memory, per IP + per username) ----
@@ -249,7 +249,7 @@ PORT_CATALOG = {
     5031: ("Kasir POS", "Backend Kasir POS", "pos"),
     8099: ("Hermes WebUI API", "Backend WebUI internal", "hermes-webui"),
     8787: ("Hermes WebUI", "Panel Hermes internal", "hermes-webui"),
-    9118: ("Leo2agust Labs", "Dashboard ini", None),
+    9118: ("VPS Labs", "Dashboard ini", None),
     9119: ("Hermes Dashboard", "Dashboard Hermes internal", "hermes-dashboard"),
     20128: ("9router", "Router model AI", "9router"),
     20129: ("Task Router", "Routing model berbasis tugas", "hermes-ta\1***"),
@@ -343,7 +343,7 @@ def login():
         if _rate_limited(f"ip:{ip}", limit=15, window=900) or _rate_limited(f"user:{user}", limit=10, window=900):
             time.sleep(1.5)
             return render_template("login.html", error="Terlalu banyak percobaan. Tunggu 15 menit.", brand_name=_lab_brand()[0], brand_sub=_lab_brand()[1]), 429
-        valid = lab_account.valid_identifier(user) and hmac.compare_digest(password, os.environ.get("NUVULABS_PASSWORD", ""))
+        valid = lab_account.valid_identifier(user) and hmac.compare_digest(password, os.environ.get("LABS_PASSWORD", ""))
         if valid:
             _clear_rate(f"ip:{ip}"); _clear_rate(f"user:{user}")
             session.clear(); session.permanent = True; session["authenticated"] = True; session["user"] = user
@@ -1171,7 +1171,7 @@ def api_lab_usage_pdf():
     except ValueError: period = 30
     data = lab_admin.usage_stats(period)
     return send_file(io.BytesIO(lab_admin.usage_report_pdf(data)), mimetype="application/pdf",
-                     as_attachment=True, download_name=f"leo2agust-labs-usage-{data['period_days']}d.pdf")
+                     as_attachment=True, download_name=f"vps-labs-usage-{data['period_days']}d.pdf")
 
 
 @app.get("/api/lab/models")
@@ -1492,7 +1492,7 @@ if REPORT.exists():
     last_audit.update(at=int(REPORT.stat().st_mtime), checks=checks, summary=summary)
 
 if __name__ == "__main__":
-    if not app.secret_key: raise RuntimeError("NUVULABS_SECRET is required")
+    if not app.secret_key: raise RuntimeError("LABS_SECRET is required")
     try:
         lab_restart.record_restart()
     except Exception:
@@ -1505,5 +1505,5 @@ if __name__ == "__main__":
         _bridge.start_watchdog()
     except Exception:
         pass
-    # Default tetap privat. Set NUVULABS_HOST=0.0.0.0 hanya untuk akses IP yang dibatasi firewall/VPN.
-    app.run(host=os.environ.get("NUVULABS_HOST", "127.0.0.1"), port=int(os.environ.get("NUVULABS_PORT", "9118")))
+    # Default tetap privat. Set LABS_HOST=0.0.0.0 hanya untuk akses IP yang dibatasi firewall/VPN.
+    app.run(host=os.environ.get("LABS_HOST", "127.0.0.1"), port=int(os.environ.get("LABS_PORT", "9118")))

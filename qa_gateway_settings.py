@@ -8,7 +8,7 @@ def env(name):
     if not m: raise RuntimeError(f"missing {name}")
     return m.group(1).strip('"')
 
-user, password = env("NUVULABS_USER"), env("NUVULABS_PASSWORD")
+user, password = env("LABS_USER"), env("LABS_PASSWORD")
 base = "http://127.0.0.1:9118"
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)

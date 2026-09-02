@@ -1,4 +1,4 @@
-"""Leo2agust Lab — password management (labs, vps root/ubuntu), web status, alerts."""
+"""VPS Labs — password management (labs, vps root/ubuntu), web status, alerts."""
 import hashlib
 import hmac
 import io
@@ -19,7 +19,7 @@ SSH_OVERRIDE = Path("/etc/ssh/sshd_config.d/90-labs-access.conf")
 
 
 def _authorize(admin_password: str) -> dict | None:
-    if not hmac.compare_digest(admin_password, os.environ.get("NUVULABS_PASSWORD", "")):
+    if not hmac.compare_digest(admin_password, os.environ.get("LABS_PASSWORD", "")):
         return {"ok": False, "error": "password admin Labs salah"}
     return None
 
@@ -81,7 +81,7 @@ def generate_ssh_key(user: str, admin_password: str) -> dict:
         os.chown(ssh_dir, account.pw_uid, account.pw_gid)
         os.chown(auth, account.pw_uid, account.pw_gid)
         return {"ok": True, "user": user, "private_key": private,
-                "filename": f"{user}-leo2agust-{stamp}", "fingerprint": fingerprint,
+                "filename": f"{user}-vps-labs-{stamp}", "fingerprint": fingerprint,
                 "note": "public key terpasang; private key hanya dikirim sekali"}
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
@@ -96,7 +96,7 @@ def set_ssh_mode(mode: str, admin_password: str) -> dict:
     status = ssh_access_status()
     if mode == "key" and (not status.get("ok") or not any(x["keys"] for x in status["users"])):
         return {"ok": False, "error": "buat minimal satu SSH key sebelum mengaktifkan Key only"}
-    content = ("# Managed by Leo2agust Laboratory\nPubkeyAuthentication yes\n" +
+    content = ("# Managed by VPS Labs\nPubkeyAuthentication yes\n" +
                ("PasswordAuthentication no\nPermitRootLogin prohibit-password\n" if mode == "key" else
                 "PasswordAuthentication yes\nPermitRootLogin prohibit-password\n"))
     backup = SSH_OVERRIDE.read_text() if SSH_OVERRIDE.exists() else None
@@ -120,8 +120,8 @@ def set_ssh_mode(mode: str, admin_password: str) -> dict:
 def change_labs_password(username: str, old_pw: str, new_pw: str, new_username: str = "") -> dict:
     """Change Labs credentials in private EnvironmentFile."""
     import hmac
-    cur_user = os.environ.get("NUVULABS_USER", "")
-    cur_pw = os.environ.get("NUVULABS_PASSWORD", "")
+    cur_user = os.environ.get("LABS_USER", "")
+    cur_pw = os.environ.get("LABS_PASSWORD", "")
     if not (hmac.compare_digest(username, cur_user) and hmac.compare_digest(old_pw, cur_pw)):
         return {"ok": False, "error": "username/password lama salah"}
     new_username = new_username.strip() or username
@@ -138,8 +138,8 @@ def change_labs_password(username: str, old_pw: str, new_pw: str, new_username: 
         txt = env_file.read_text()
     except Exception as e:
         return {"ok": False, "error": f"gagal baca credential store: {e}"}
-    txt, cu = re.subn(r'(?m)^NUVULABS_USER=.*$', 'NUVULABS_USER=' + new_username, txt)
-    txt, cp = re.subn(r'(?m)^NUVULABS_PASSWORD=.*$', 'NUVULABS_PASSWORD=' + new_pw, txt)
+    txt, cu = re.subn(r'(?m)^LABS_USER=.*$', 'LABS_USER=' + new_username, txt)
+    txt, cp = re.subn(r'(?m)^LABS_PASSWORD=.*$', 'LABS_PASSWORD=' + new_pw, txt)
     if cu != 1 or cp != 1:
         return {"ok": False, "error": "credential store tidak lengkap"}
     try:
@@ -168,12 +168,7 @@ def change_vps_password(user: str, new_pw: str, admin_password: str = "") -> dic
 
 
 # ---------------- Web status ----------------
-WEB_DOMAINS = [
-    "https://leo2agust.my.id",
-    "https://labs.leo2agust.my.id",
-    "https://wms.leo2agust.my.id",
-    "https://pos.leo2agust.my.id",
-]
+WEB_DOMAINS = [url.strip() for url in os.environ.get("LABS_WEB_DOMAINS", "").split(",") if url.strip()]
 
 
 def web_status(timeout: int = 12) -> dict:

@@ -1,4 +1,4 @@
-package com.leo2agust.labs;
+package app.vpslabs.dashboard;
 
 import android.app.AlertDialog;
 import android.content.Context;
@@ -15,7 +15,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Cek update Labs APK dari GitHub Releases (leo2august/VPS-Labs).
+ * Cek update APK dari release API yang dikonfigurasi saat build.
  * Membandingkan tag versi remote vs versi lokal; kalau ada yang lebih baru,
  * tampilkan dialog dengan tombol Unduh.
  */
@@ -25,12 +25,13 @@ public class UpdateChecker {
         void onResult(boolean hasUpdate, String latestVersion, String apkUrl, String notes);
     }
 
-    private static final String RELEASES_API = "https://api.github.com/repos/leo2august/VPS-Labs/releases/latest";
+    private static final String RELEASES_API = "";
     private static final String ASSET_NAME = "Labs-";
 
     public static void check(final Context context, final boolean silentIfCurrent, final UpdateListener listener) {
         new Thread(new Runnable() {
             public void run() {
+                if (RELEASES_API.isEmpty()) return;
                 String tag = "";
                 String apkUrl = "";
                 String notes = "";

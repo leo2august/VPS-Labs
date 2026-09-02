@@ -1,4 +1,4 @@
-# VPS Sentinel Labs
+# VPS Labs
 
 Private **VPS observatory / admin dashboard** — a single dark, Japanese-modern web UI to watch system health, manage services, audit security, control model/provider routes, back up and restore, and more.
 
@@ -36,8 +36,8 @@ Clean, self-contained template: no personal data, no secrets, no branding of any
 
 ```bash
 # 1. Clone / copy this template
-git clone <this-repo> /opt/vps-sentinel
-cd /opt/vps-sentinel
+git clone <this-repo> /opt/vps-labs
+cd /opt/vps-labs
 
 # 2. Python deps
 python3 -m venv .venv
@@ -60,10 +60,10 @@ python app.py                 # listens on 127.0.0.1:9118, open http://127.0.0.1
 ### Run as a systemd service (recommended)
 
 ```bash
-sudo cp deploy/vps-audit.service.example /etc/systemd/system/vps-sentinel.service
+sudo cp deploy/vps-audit.service.example /etc/systemd/system/vps-labs.service
 #  -> edit paths inside to your install dir
 sudo systemctl daemon-reload
-sudo systemctl enable --now vps-sentinel
+sudo systemctl enable --now vps-labs
 ```
 
 ### Put it behind a reverse proxy (Caddy example)
